@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtGui import QIcon, QAction, QPixmap, QPainter, QBrush, QColor
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 
 
@@ -15,6 +15,9 @@ class TrayIcon(QObject):
     
     def __init__(self, app_icon: Optional[QIcon] = None):
         super().__init__()
+        # Create a simple icon if none provided
+        if app_icon is None:
+            app_icon = self._create_default_icon()
         self.tray = QSystemTrayIcon(app_icon)
         self.tray.setToolTip("ComputerUseAI - Desktop AI Assistant")
         self._create_menu()
@@ -65,6 +68,26 @@ class TrayIcon(QObject):
         menu.addAction(quit_action)
         
         self.tray.setContextMenu(menu)
+    
+    def _create_default_icon(self) -> QIcon:
+        """Create a simple default icon for the tray"""
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(QColor(0, 0, 0, 0))  # Transparent background
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Draw a simple circle with "AI" text
+        painter.setBrush(QBrush(QColor(70, 130, 180)))  # Steel blue
+        painter.setPen(QColor(255, 255, 255))  # White border
+        painter.drawEllipse(2, 2, 28, 28)
+        
+        # Draw "AI" text
+        painter.setPen(QColor(255, 255, 255))  # White text
+        painter.drawText(8, 8, 16, 16, 0, "AI")
+        
+        painter.end()
+        return QIcon(pixmap)
     
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:

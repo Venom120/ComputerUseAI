@@ -5,7 +5,9 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class FileManager:
@@ -22,14 +24,14 @@ class FileManager:
             shutil.copy2(src_path, dest_path)
         else:
             shutil.copy2(src_path, dest_path)
-        logger.debug("Stored file {} -> {}", src_path, dest_path)
+        logger.debug("Stored file %s -> %s", src_path, dest_path)
         return dest_path
 
     def delete(self, path: str | Path) -> None:
         try:
             Path(path).unlink(missing_ok=True)
         except Exception as e:
-            logger.warning("Failed to delete {}: {}", path, e)
+            logger.warning("Failed to delete %s: %s", path, e)
 
     def total_size(self, directory: str | Path) -> int:
         total = 0

@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 import pyautogui
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,40 +27,40 @@ class ComputerUse:
         try:
             pyautogui.click(x, y, button=button)
             time.sleep(self.config.click_delay)
-            logger.debug("Clicked at ({}, {}) with {} button", x, y, button)
+            logger.debug("Clicked at (%d, %d) with %s button", x, y, button)
             return True
         except Exception as e:
-            logger.error("Click failed at ({}, {}): {}", x, y, e)
+            logger.error("Click failed at (%d, %d): %s", x, y, e)
             return False
 
     def type_text(self, text: str, interval: float = None) -> bool:
         try:
             interval = interval or self.config.type_delay
             pyautogui.typewrite(text, interval=interval)
-            logger.debug("Typed text: {}", text[:50] + "..." if len(text) > 50 else text)
+            logger.debug("Typed text: %s", text[:50] + "..." if len(text) > 50 else text)
             return True
         except Exception as e:
-            logger.error("Type text failed: {}", e)
+            logger.error("Type text failed: %s", e)
             return False
 
     def press_key(self, key: str) -> bool:
         try:
             pyautogui.press(key)
             time.sleep(self.config.click_delay)
-            logger.debug("Pressed key: {}", key)
+            logger.debug("Pressed key: %s", key)
             return True
         except Exception as e:
-            logger.error("Press key failed: {}", e)
+            logger.error("Press key failed: %s", e)
             return False
 
     def press_key_combination(self, keys: list[str]) -> bool:
         try:
             pyautogui.hotkey(*keys)
             time.sleep(self.config.click_delay)
-            logger.debug("Pressed key combination: {}", keys)
+            logger.debug("Pressed key combination: %s", keys)
             return True
         except Exception as e:
-            logger.error("Key combination failed: {}", e)
+            logger.error("Key combination failed: %s", e)
             return False
 
     def scroll(self, clicks: int, x: Optional[int] = None, y: Optional[int] = None) -> bool:
@@ -68,19 +70,19 @@ class ComputerUse:
             else:
                 pyautogui.scroll(clicks)
             time.sleep(self.config.scroll_delay)
-            logger.debug("Scrolled {} clicks", clicks)
+            logger.debug("Scrolled %d clicks", clicks)
             return True
         except Exception as e:
-            logger.error("Scroll failed: {}", e)
+            logger.error("Scroll failed: %s", e)
             return False
 
     def get_screen_region(self, x: int, y: int, width: int, height: int) -> Optional[Any]:
         try:
             screenshot = pyautogui.screenshot(region=(x, y, width, height))
-            logger.debug("Captured region: {}x{} at ({}, {})", width, height, x, y)
+            logger.debug("Captured region: %dx%d at (%d, %d)", width, height, x, y)
             return screenshot
         except Exception as e:
-            logger.error("Screen region capture failed: {}", e)
+            logger.error("Screen region capture failed: %s", e)
             return None
 
     def find_image_on_screen(self, image_path: str, confidence: float = 0.8) -> Optional[Tuple[int, int]]:
@@ -88,11 +90,11 @@ class ComputerUse:
             location = pyautogui.locateOnScreen(image_path, confidence=confidence)
             if location:
                 center = pyautogui.center(location)
-                logger.debug("Found image at ({}, {})", center.x, center.y)
+                logger.debug("Found image at (%d, %d)", center.x, center.y)
                 return (center.x, center.y)
             return None
         except Exception as e:
-            logger.error("Image search failed: {}", e)
+            logger.error("Image search failed: %s", e)
             return None
 
     def wait_for_element(self, image_path: str, timeout: int = 10, confidence: float = 0.8) -> Optional[Tuple[int, int]]:
@@ -102,11 +104,11 @@ class ComputerUse:
             if location:
                 return location
             time.sleep(0.5)
-        logger.warning("Element not found within {} seconds", timeout)
+        logger.warning("Element not found within %d seconds", timeout)
         return None
 
     def verify_action_success(self, expected_state: str) -> bool:
         # Placeholder for verification logic
         # In a real implementation, this would check screen state, window titles, etc.
-        logger.debug("Verifying action success: {}", expected_state)
+        logger.debug("Verifying action success: %s", expected_state)
         return True

@@ -4,7 +4,19 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import pyautogui
-from loguru import logger
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
+
+# Windows-specific imports
+if sys.platform.startswith("win"):
+    try:
+        import win32gui
+    except ImportError:
+        win32gui = None
+else:
+    win32gui = None
 
 from ..processing.ocr_engine import OCREngine, OCRConfig
 
@@ -39,11 +51,11 @@ class ActionVerifier:
             except:
                 pass
             
-            logger.debug("Click verification: expected '{}', found: {}", expected_text, visible_text)
+            logger.debug("Click verification: expected '%s', found: %s", expected_text, visible_text)
             return success
             
         except Exception as e:
-            logger.error("Click verification failed: {}", e)
+            logger.error("Click verification failed: %s", e)
             return False
 
     def verify_window_change(self, expected_title: str, timeout: int = 5) -> bool:
@@ -51,23 +63,22 @@ class ActionVerifier:
         try:
             start_time = time.time()
             while time.time() - start_time < timeout:
-                try:
-                    import win32gui
-                    current_title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
-                    if expected_title.lower() in current_title.lower():
-                        logger.debug("Window change verified: {}", current_title)
-                        return True
-                except ImportError:
+                if win32gui is None:
                     logger.warning("win32gui not available for window verification")
                     return True  # Skip verification if not available
                 
+                current_title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
+                if expected_title.lower() in current_title.lower():
+                    logger.debug("Window change verified: %s", current_title)
+                    return True
+                
                 time.sleep(0.5)
             
-            logger.warning("Window change verification timeout: expected '{}'", expected_title)
+            logger.warning("Window change verification timeout: expected '%s'", expected_title)
             return False
             
         except Exception as e:
-            logger.error("Window change verification failed: {}", e)
+            logger.error("Window change verification failed: %s", e)
             return False
 
     def verify_text_input(self, expected_text: str, field_region: Optional[Tuple[int, int, int, int]] = None) -> bool:
@@ -94,11 +105,11 @@ class ActionVerifier:
             except:
                 pass
             
-            logger.debug("Text input verification: expected '{}', found: {}", expected_text, visible_text)
+            logger.debug("Text input verification: expected '%s', found: %s", expected_text, visible_text)
             return success
             
         except Exception as e:
-            logger.error("Text input verification failed: {}", e)
+            logger.error("Text input verification failed: %s", e)
             return False
 
     def verify_element_appeared(self, image_path: str, timeout: int = 5) -> bool:
@@ -108,15 +119,15 @@ class ActionVerifier:
             while time.time() - start_time < timeout:
                 location = pyautogui.locateOnScreen(image_path, confidence=0.8)
                 if location:
-                    logger.debug("Element appeared: {}", image_path)
+                    logger.debug("Element appeared: %s", image_path)
                     return True
                 time.sleep(0.5)
             
-            logger.warning("Element appearance verification timeout: {}", image_path)
+            logger.warning("Element appearance verification timeout: %s", image_path)
             return False
             
         except Exception as e:
-            logger.error("Element appearance verification failed: {}", e)
+            logger.error("Element appearance verification failed: %s", e)
             return False
 
     def get_verification_result(self, verification_type: str, **kwargs) -> bool:
@@ -142,5 +153,5 @@ class ActionVerifier:
                 kwargs.get("timeout", 5)
             )
         else:
-            logger.warning("Unknown verification type: {}", verification_type)
+            logger.warning("Unknown verification type: %s", verification_type)
             return True  # Default to success for unknown types

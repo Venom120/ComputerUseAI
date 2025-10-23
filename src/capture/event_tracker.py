@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 from pynput import keyboard, mouse
 
 try:

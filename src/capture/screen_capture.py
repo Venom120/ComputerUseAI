@@ -8,7 +8,9 @@ from typing import Optional, Tuple
 import mss
 import numpy as np
 from PIL import Image
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.utils import ensure_dirs
 
@@ -77,21 +79,21 @@ class ScreenCapture:
         self._running = True
         ensure_dirs(self.output_dir)
         interval = 1.0 / max(1, self.config.fps)
-        logger.info("Screen capture started at {} FPS", self.config.fps)
+        logger.info("Screen capture started at %d FPS", self.config.fps)
         try:
             while self._running:
                 t0 = time.time()
                 frame = self._grab()
                 if self._should_save(frame):
                     path = self._save_frame(frame, t0)
-                    logger.debug("Saved frame {}", path.name)
+                    logger.debug("Saved frame %s", path.name)
                     self._previous_frame = frame
                 elapsed = time.time() - t0
                 delay = max(0.0, interval - elapsed)
                 if delay:
                     time.sleep(delay)
         except Exception as e:
-            logger.exception("Screen capture error: {}", e)
+            logger.exception("Screen capture error: %s", e)
         finally:
             logger.info("Screen capture stopped")
             self._running = False

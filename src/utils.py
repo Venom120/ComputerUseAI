@@ -9,7 +9,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from loguru import logger
+import logging
+import logging.handlers
 
 
 APP_NAME = "ComputerUseAI"
@@ -39,10 +40,34 @@ def save_json(path: str | Path, data: Dict[str, Any]) -> None:
 
 def configure_logging(log_dir: str | Path = "data/logs", level: str = "INFO") -> None:
     ensure_dirs(log_dir)
-    logger.remove()
-    logger.add(sys.stderr, level=level, enqueue=True, backtrace=False, diagnose=False)
+    
+    # Configure root logger
+    logger = logging.getLogger()
+    logger.setLevel(getattr(logging, level.upper()))
+    
+    # Clear existing handlers
+    logger.handlers.clear()
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(getattr(logging, level.upper()))
+    console_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+    
+    # File handler with rotation
     log_file = Path(log_dir) / f"{APP_NAME.lower()}.log"
-    logger.add(str(log_file), level=level, rotation="10 MB", retention="7 days", enqueue=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        str(log_file), maxBytes=10*1024*1024, backupCount=7
+    )
+    file_handler.setLevel(getattr(logging, level.upper()))
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
 
 
 def human_size(num_bytes: int) -> str:

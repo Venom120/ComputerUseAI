@@ -4,7 +4,9 @@ import time
 from pathlib import Path
 from typing import Iterable
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def cleanup_old_files(directories: Iterable[str | Path], max_age_days: int) -> int:
@@ -18,7 +20,7 @@ def cleanup_old_files(directories: Iterable[str | Path], max_age_days: int) -> i
                     p.unlink()
                     removed += 1
                 except Exception as e:
-                    logger.debug("Failed to remove {}: {}", p, e)
+                    logger.debug("Failed to remove %s: %s", p, e)
     return removed
 
 
@@ -37,7 +39,7 @@ def cleanup_size_limit(directory: str | Path, max_bytes: int) -> int:
             total -= sz
             removed += 1
         except Exception as e:
-            logger.debug("Failed to remove {}: {}", p, e)
+            logger.debug("Failed to remove %s: %s", p, e)
     return removed
 
 

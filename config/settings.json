@@ -1,8 +1,8 @@
 {
   "capture": {
     "fps": 3,
-    "quality": 75,
-    "max_storage_mb": 1000,
+    "quality": 60,
+    "max_storage_mb": 10000,
     "screenshot_format": "webp",
     "max_keep_days": 7,
     "monitors": "all",
@@ -45,8 +45,7 @@
     ]
   },
   "ui": {
-    "start_minimized": true,
+    "start_minimized": false,
     "enable_tray": true
   }
 }
-

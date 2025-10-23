@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -26,18 +28,18 @@ class SpeechToText:
                 from whispercpp import Whisper  # type: ignore
 
                 self._engine = Whisper(self.config.model_path.as_posix())
-                logger.info("Initialized Whisper.cpp with {}", self.config.model_path)
+                logger.info("Initialized Whisper.cpp with %s", self.config.model_path)
             except Exception as e:
-                logger.warning("Failed to init whispercpp: {}", e)
+                logger.warning("Failed to init whispercpp: %s", e)
         if self._engine is None:
             try:
                 from faster_whisper import WhisperModel  # type: ignore
 
                 self._engine = WhisperModel(self.config.model_path.as_posix(), device="cpu")
-                logger.info("Initialized faster-whisper with {}", self.config.model_path)
+                logger.info("Initialized faster-whisper with %s", self.config.model_path)
                 self.config.engine = "faster-whisper"
             except Exception as e:
-                logger.error("No STT engine available: {}", e)
+                logger.error("No STT engine available: %s", e)
 
     def transcribe_file(self, audio_path: str | Path) -> Dict[str, Any]:
         audio_path = Path(audio_path)
@@ -61,7 +63,7 @@ class SpeechToText:
                 full_text = " ".join(s["text"] for s in segments).strip()
                 return {"text": full_text, "confidence": getattr(info, "language_probability", 0.8), "timestamps": segments}
         except Exception as e:
-            logger.exception("STT error: {}", e)
+            logger.exception("STT error: %s", e)
             return {"text": "", "confidence": 0.0, "timestamps": []}
 
 

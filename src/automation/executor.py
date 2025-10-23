@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .computer_use import ComputerUse, ComputerUseConfig
 
@@ -50,10 +52,10 @@ class WorkflowExecutor:
                 )
                 steps.append(step)
             
-            logger.info("Loaded workflow with {} steps", len(steps))
+            logger.info("Loaded workflow with %d steps", len(steps))
             return steps
         except Exception as e:
-            logger.error("Failed to load workflow: {}", e)
+            logger.error("Failed to load workflow: %s", e)
             return []
 
     def execute_workflow(self, workflow_id: str, steps: List[WorkflowStep], parameters: Dict[str, Any] = None) -> ExecutionResult:
@@ -66,10 +68,10 @@ class WorkflowExecutor:
         completed_steps = 0
         
         try:
-            logger.info("Starting workflow execution: {}", workflow_id)
+            logger.info("Starting workflow execution: %s", workflow_id)
             
             for i, step in enumerate(steps):
-                logger.info("Executing step {}/{}: {}", i + 1, len(steps), step.action_type)
+                logger.info("Executing step %d/%d: %s", i + 1, len(steps), step.action_type)
                 
                 success = self.execute_step(step, parameters or {})
                 if not success:
@@ -86,11 +88,11 @@ class WorkflowExecutor:
                 time.sleep(0.5)  # Brief pause between steps
             
             execution_time = time.time() - start_time
-            logger.info("Workflow completed successfully in {:.2f}s", execution_time)
+            logger.info("Workflow completed successfully in %.2fs", execution_time)
             return ExecutionResult(True, None, execution_time, completed_steps)
             
         except Exception as e:
-            logger.exception("Workflow execution error: {}", e)
+            logger.exception("Workflow execution error: %s", e)
             return ExecutionResult(False, str(e), time.time() - start_time, completed_steps)
         finally:
             self._running = False
@@ -104,12 +106,12 @@ class WorkflowExecutor:
                     return True
                 
                 if attempt < step.retry_count - 1:
-                    logger.warning("Step failed, retrying ({}/{}): {}", 
+                    logger.warning("Step failed, retrying (%d/%d): %s", 
                                  attempt + 1, step.retry_count, step.action_type)
                     time.sleep(1)  # Wait before retry
                 
             except Exception as e:
-                logger.error("Step execution error (attempt {}): {}", attempt + 1, e)
+                logger.error("Step execution error (attempt %d): %s", attempt + 1, e)
                 if attempt == step.retry_count - 1:
                     return False
         
@@ -151,7 +153,7 @@ class WorkflowExecutor:
             return True
         
         else:
-            logger.warning("Unknown action type: {}", action_type)
+            logger.warning("Unknown action type: %s", action_type)
             return False
 
     def stop_execution(self) -> None:

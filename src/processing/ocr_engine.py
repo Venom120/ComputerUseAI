@@ -7,7 +7,9 @@ from typing import Dict, Any, List
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 import pytesseract
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,7 +50,7 @@ class OCREngine:
                     )
             return {"items": items}
         except Exception as e:
-            logger.exception("OCR error: {}", e)
+            logger.exception("OCR error: %s", e)
             return {"items": []}
 
 

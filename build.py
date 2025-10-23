@@ -57,7 +57,6 @@ a = Analysis(
         'faster_whisper',
         'transformers',
         'sqlalchemy',
-        'loguru',
     ],
     hookspath=[],
     hooksconfig={},

@@ -13,7 +13,9 @@ import soundfile as sf
 
 # webrtcvad = None  # Disabled due to build requirements
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 from src.utils import ensure_dirs
 
 
@@ -37,7 +39,7 @@ class AudioCapture:
 
     def _callback(self, indata, frames, time_info, status):  # sd callback signature
         if status:
-            logger.debug("Audio status: {}", status)
+            logger.debug("Audio status: %s", status)
         self._q.put(indata.copy())
 
     def start(self) -> None:
@@ -49,7 +51,7 @@ class AudioCapture:
             callback=self._callback,
         )
         self._stream.start()
-        logger.info("Audio capture started @ {} Hz", self.config.sample_rate)
+        logger.info("Audio capture started @ %d Hz", self.config.sample_rate)
 
         segment = []
         samples_per_segment = self.config.segment_seconds * self.config.sample_rate
@@ -68,12 +70,12 @@ class AudioCapture:
                     ts = time.strftime("%Y%m%d_%H%M%S")
                     path = self.output_dir / f"audio_{ts}.wav"
                     sf.write(path, buf, self.config.sample_rate, subtype="PCM_16")
-                    logger.debug("Saved audio segment {}", path.name)
+                    logger.debug("Saved audio segment %s", path.name)
                     segment = []
         except queue.Empty:
             pass
         except Exception as e:
-            logger.exception("Audio capture error: {}", e)
+            logger.exception("Audio capture error: %s", e)
         finally:
             self.stop()
             logger.info("Audio capture stopped")

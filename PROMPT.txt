@@ -1,2 +1,4 @@
 - save 1min of video then process it and then delete the video, which will save storage.
-- add a option for selecting which screen to record or a particular window also.
+- add a option for selecting which screen to record or a particular window also. (keep in mind the os can be win, mac, linux)
+- the ability to see weather the recording is started or notby playing current timestamp of recording in the dashboard. store the recorded video in the data/captures folder
+- add a tray icon option for exiting the application, and by default the tray icon closes if the the application is closed

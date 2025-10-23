@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,7 +38,7 @@ class ScreenAnalyzer:
             "ui_elements": ui_elements,
             "context": "",
         }
-        logger.debug("Screen JSON generated for {}", screenshot_path)
+        logger.debug("Screen JSON generated for %s", screenshot_path)
         return data
 
 

@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -32,9 +34,9 @@ class LocalLLM:
             if self._tokenizer.pad_token is None:
                 self._tokenizer.pad_token = self._tokenizer.eos_token
             self._llm = {"tokenizer": self._tokenizer, "model": self._model}
-            logger.info("LLM loaded: {}", model_name)
+            logger.info("LLM loaded: %s", model_name)
         except Exception as e:
-            logger.error("Failed to load LLM: {}", e)
+            logger.error("Failed to load LLM: %s", e)
 
     def analyze_workflow(self, screen_jsons: List[Dict[str, Any]], transcripts: List[str], events: List[Dict[str, Any]]) -> Dict[str, Any]:
         if self._llm is None:
@@ -55,7 +57,7 @@ class LocalLLM:
             text = text[len(prompt):].strip()
             return self._safe_json(text)
         except Exception as e:
-            logger.exception("LLM analysis error: {}", e)
+            logger.exception("LLM analysis error: %s", e)
             return {"workflow_summary": "", "steps": [], "is_repetitive": False, "automation_potential": "low"}
 
     def _build_prompt(self, screen_jsons, transcripts, events) -> str:
