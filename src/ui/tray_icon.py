@@ -3,18 +3,21 @@ from __future__ import annotations
 import logging
 from typing import Callable, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtGui import QIcon, QAction, QPixmap, QPainter, QBrush, QColor, QCursor  # Import QCursor
+# Import pyqtSignal as Signal for explicit typing
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSignal as Signal
+from PyQt6.QtGui import QIcon, QAction, QPixmap, QPainter, QBrush, QColor, QCursor
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 
 logger = logging.getLogger(__name__)
 
 
 class TrayIcon(QObject):
-    show_window = pyqtSignal()
-    start_recording = pyqtSignal()
-    stop_recording = pyqtSignal()
-    quit_app = pyqtSignal()
+    # Explicitly type-hint signals for linters like mypy
+    show_window: Signal = pyqtSignal()
+    show_settings: Signal = pyqtSignal()
+    start_recording: Signal = pyqtSignal()
+    stop_recording: Signal = pyqtSignal()
+    quit_app: Signal = pyqtSignal()
     
     def __init__(self, app_icon: Optional[QIcon] = None):
         super().__init__()
@@ -93,7 +96,6 @@ class TrayIcon(QObject):
             
             # System actions
             settings_action = QAction("Settings")
-            # Connect to the new signal instead of the old method
             settings_action.triggered.connect(self.show_settings.emit) 
             menu.addAction(settings_action)
             

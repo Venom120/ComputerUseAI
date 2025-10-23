@@ -80,14 +80,32 @@ class MainWindow(QMainWindow):
         self._load_workflows()
 
     def _init_ui(self) -> None:
-        tabs = QTabWidget()
-        tabs.addTab(self._dashboard_tab(), "Dashboard")
-        tabs.addTab(self._workflows_tab(), "Workflows")
-        tabs.addTab(self._timeline_tab(), "Timeline")
-        tabs.addTab(self._automation_tab(), "Automation")
-        tabs.addTab(self._settings_tab(), "Settings")
+        # Store the tab widget as an instance attribute
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._dashboard_tab(), "Dashboard")
+        self.tabs.addTab(self._workflows_tab(), "Workflows")
+        self.tabs.addTab(self._timeline_tab(), "Timeline")
+        self.tabs.addTab(self._automation_tab(), "Automation")
+        self.tabs.addTab(self._settings_tab(), "Settings")
 
-        self.setCentralWidget(tabs)
+        self.setCentralWidget(self.tabs) # Use self.tabs
+
+    def show_settings_tab(self):
+        """Finds and switches to the Settings tab, then shows the window."""
+        # Find the settings tab by name to be safer than a fixed index
+        settings_index = -1
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i).lower() == "settings":
+                settings_index = i
+                break
+        
+        if settings_index != -1:
+            self.tabs.setCurrentIndex(settings_index)
+        
+        # Show, raise, and activate the window
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def _dashboard_tab(self) -> QWidget:
         root = QWidget()

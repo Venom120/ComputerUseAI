@@ -35,6 +35,7 @@ def main() -> int:
     tray_icon.show_window.connect(window.show)
     tray_icon.show_window.connect(window.raise_)
     tray_icon.show_window.connect(window.activateWindow)
+    tray_icon.show_settings.connect(window.show_settings_tab)
     tray_icon.start_recording.connect(window.start_recording)
     tray_icon.stop_recording.connect(window.stop_recording)
     tray_icon.quit_app.connect(app.quit)
