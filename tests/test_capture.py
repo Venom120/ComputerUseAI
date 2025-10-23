@@ -1,4 +1,3 @@
-import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -10,11 +9,11 @@ from src.capture.event_tracker import EventTracker, EventTrackerConfig
 
 class TestScreenCapture:
     def test_initialization(self):
-        config = ScreenCaptureConfig(fps=2, quality=80)
+        config = ScreenCaptureConfig(fps=3, quality=70)
         with tempfile.TemporaryDirectory() as temp_dir:
             capture = ScreenCapture(temp_dir, config)
-            assert capture.config.fps == 2
-            assert capture.config.quality == 80
+            assert capture.config.fps == 3
+            assert capture.config.quality == 70
             assert capture.output_dir == Path(temp_dir)
 
     def test_frame_difference_ratio(self):

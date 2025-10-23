@@ -38,7 +38,7 @@ def save_json(path: str | Path, data: Dict[str, Any]) -> None:
     tmp.replace(p)
 
 
-def configure_logging(log_dir: str | Path = "data/logs", level: str = "INFO") -> None:
+def configure_logging(log_dir: str | Path = "data/logs", level: str = "DEBUG") -> None:
     ensure_dirs(log_dir)
     
     # Configure root logger
@@ -74,7 +74,7 @@ def human_size(num_bytes: int) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if num_bytes < 1024.0:
             return f"{num_bytes:3.1f} {unit}"
-        num_bytes /= 1024.0
+        num_bytes //= 1024
     return f"{num_bytes:.1f} PB"
 
 

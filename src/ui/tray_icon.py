@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Callable, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtGui import QIcon, QAction, QPixmap, QPainter, QBrush, QColor
+from PyQt6.QtGui import QIcon, QAction, QPixmap, QPainter, QBrush, QColor, QCursor  # Import QCursor
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
+
+logger = logging.getLogger(__name__)
 
 
 class TrayIcon(QObject):
@@ -15,59 +18,18 @@ class TrayIcon(QObject):
     
     def __init__(self, app_icon: Optional[QIcon] = None):
         super().__init__()
-        # Create a simple icon if none provided
+        logger.debug("Initializing TrayIcon...")
         if app_icon is None:
             app_icon = self._create_default_icon()
         self.tray = QSystemTrayIcon(app_icon)
         self.tray.setToolTip("ComputerUseAI - Desktop AI Assistant")
-        self._create_menu()
+        
         self.tray.activated.connect(self._on_tray_activated)
-    
-    def _create_menu(self):
-        menu = QMenu()
         
-        # Main actions
-        show_action = QAction("Show Window")
-        show_action.triggered.connect(self.show_window.emit)
-        menu.addAction(show_action)
+        # Add a local state to track recording, as the menu will be built on the fly
+        self._is_recording = False
         
-        menu.addSeparator()
-        
-        # Recording actions
-        self.start_action = QAction("Start Recording")
-        self.start_action.triggered.connect(self.start_recording.emit)
-        menu.addAction(self.start_action)
-        
-        self.stop_action = QAction("Stop Recording")
-        self.stop_action.triggered.connect(self.stop_recording.emit)
-        self.stop_action.setEnabled(False)
-        menu.addAction(self.stop_action)
-        
-        menu.addSeparator()
-        
-        # Workflow actions
-        run_workflow_action = QAction("Run Last Workflow")
-        run_workflow_action.triggered.connect(self._run_last_workflow)
-        menu.addAction(run_workflow_action)
-        
-        menu.addSeparator()
-        
-        # System actions
-        settings_action = QAction("Settings")
-        settings_action.triggered.connect(self._show_settings)
-        menu.addAction(settings_action)
-        
-        about_action = QAction("About")
-        about_action.triggered.connect(self._show_about)
-        menu.addAction(about_action)
-        
-        menu.addSeparator()
-        
-        quit_action = QAction("Quit")
-        quit_action.triggered.connect(self.quit_app.emit)
-        menu.addAction(quit_action)
-        
-        self.tray.setContextMenu(menu)
+        logger.debug("TrayIcon initialized successfully.")
     
     def _create_default_icon(self) -> QIcon:
         """Create a simple default icon for the tray"""
@@ -91,16 +53,67 @@ class TrayIcon(QObject):
     
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            logger.debug("Tray icon double-clicked.")
             self.show_window.emit()
+            
+        elif reason == QSystemTrayIcon.ActivationReason.Context: # This is a right-click
+            logger.debug("Tray icon right-clicked, dynamically building menu.")
+            
+            # --- Dynamically create the menu every time ---
+            menu = QMenu()
+            
+            # Main actions
+            show_action = QAction("Show Window")
+            show_action.triggered.connect(self.show_window.emit)
+            menu.addAction(show_action)
+            
+            menu.addSeparator()
+            
+            # Recording actions
+            start_action = QAction("Start Recording")
+            start_action.triggered.connect(self.start_recording.emit)
+            menu.addAction(start_action)
+            
+            stop_action = QAction("Stop Recording")
+            stop_action.triggered.connect(self.stop_recording.emit)
+            menu.addAction(stop_action)
+            
+            # Set enabled/disabled based on our local state
+            start_action.setEnabled(not self._is_recording)
+            stop_action.setEnabled(self._is_recording)
+            
+            menu.addSeparator()
+            
+            # Workflow actions
+            run_workflow_action = QAction("Run Last Workflow")
+            run_workflow_action.triggered.connect(self._run_last_workflow)
+            menu.addAction(run_workflow_action)
+            
+            menu.addSeparator()
+            
+            # System actions
+            settings_action = QAction("Settings")
+            # Connect to the new signal instead of the old method
+            settings_action.triggered.connect(self.show_settings.emit) 
+            menu.addAction(settings_action)
+            
+            about_action = QAction("About")
+            about_action.triggered.connect(self._show_about)
+            menu.addAction(about_action)
+            
+            menu.addSeparator()
+            
+            quit_action = QAction("Quit")
+            quit_action.triggered.connect(self.quit_app.emit)
+            menu.addAction(quit_action)
+            
+            # Show the menu at the cursor's current position
+            menu.exec(QCursor.pos())
     
     def _run_last_workflow(self):
         # Placeholder for running last workflow
         self.tray.showMessage("ComputerUseAI", "Running last workflow...", 
                             QSystemTrayIcon.MessageIcon.Information, 2000)
-    
-    def _show_settings(self):
-        self.show_window.emit()
-        # Could emit a specific signal to show settings tab
     
     def _show_about(self):
         self.tray.showMessage("ComputerUseAI", 
@@ -109,8 +122,9 @@ class TrayIcon(QObject):
     
     def set_recording_state(self, is_recording: bool):
         """Update menu based on recording state"""
-        self.start_action.setEnabled(not is_recording)
-        self.stop_action.setEnabled(is_recording)
+        # Store the state locally
+        self._is_recording = is_recording
+        logger.debug(f"Set recording state: {is_recording}")
         
         if is_recording:
             self.tray.setToolTip("ComputerUseAI - Recording...")
@@ -124,9 +138,9 @@ class TrayIcon(QObject):
     
     def show(self):
         """Show the tray icon"""
+        logger.info("Showing system tray icon.")
         self.tray.show()
     
     def hide(self):
         """Hide the tray icon"""
         self.tray.hide()
-

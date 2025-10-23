@@ -42,6 +42,10 @@ def main() -> int:
     # Connect window signals to tray
     window.start_btn.clicked.connect(lambda: tray_icon.set_recording_state(True))
     window.stop_btn.clicked.connect(lambda: tray_icon.set_recording_state(False))
+
+    # Connect main window events back to the tray to sync state
+    window.recording_started.connect(lambda: tray_icon.set_recording_state(True))
+    window.recording_stopped.connect(lambda: tray_icon.set_recording_state(False))
     
     # Show tray icon
     tray_icon.show()

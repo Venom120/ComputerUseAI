@@ -1,13 +1,17 @@
 {
   "capture": {
     "fps": 3,
-    "quality": 60,
+    "quality": 70,
     "max_storage_mb": 10000,
     "screenshot_format": "webp",
     "max_keep_days": 7,
     "monitors": "all",
     "resolution_cap": 1080,
-    "change_threshold": 0.1
+    "monitor": 0,
+    "change_threshold": 0.1,
+    "capture_mode": "video",
+    "video_segment_sec": 60,
+    "video_codec": "mp4v"
   },
   "audio": {
     "sample_rate": 16000,

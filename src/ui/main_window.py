@@ -42,11 +42,16 @@ class CaptureThread(QThread):
     def __init__(self):
         super().__init__()
         self.running = False
+        self._start_time = 0.0
     
     def run(self):
         self.running = True
+        self._start_time = time.time()
         while self.running:
-            self.status_updated.emit("Recording...")
+            elapsed = time.time() - self._start_time
+            # Format as MM:SS
+            elapsed_str = time.strftime("%M:%S", time.gmtime(elapsed))
+            self.status_updated.emit(f"Recording... ({elapsed_str})")
             time.sleep(1)
     
     def stop(self):
@@ -54,6 +59,9 @@ class CaptureThread(QThread):
 
 
 class MainWindow(QMainWindow):
+    recording_started = pyqtSignal()
+    recording_stopped = pyqtSignal()
+
     def __init__(self, settings: Dict[str, Any]):
         super().__init__()
         self.settings = settings
@@ -274,9 +282,15 @@ class MainWindow(QMainWindow):
         self.storage_limit_spinbox.setRange(100, 10000)
         self.storage_limit_spinbox.setValue(self.settings.get("capture", {}).get("max_storage_mb", 1000))
         
+        self.monitor_spinbox = QSpinBox()
+        self.monitor_spinbox.setRange(0, 10) # 0 for all, 1-10 for individual
+        self.monitor_spinbox.setValue(self.settings.get("capture", {}).get("monitor", 0))
+        self.monitor_spinbox.setToolTip("0 = All Monitors, 1 = Monitor 1, 2 = Monitor 2, etc.")
+        
         capture_layout.addRow("FPS:", self.fps_spinbox)
         capture_layout.addRow("Quality:", self.quality_spinbox)
         capture_layout.addRow("Storage Limit (MB):", self.storage_limit_spinbox)
+        capture_layout.addRow("Monitor:", self.monitor_spinbox)
         
         # Privacy settings
         privacy_group = QGroupBox("Privacy Settings")
@@ -306,15 +320,21 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.update_status("Starting recording...")
+        self.recording_started.emit()
 
     def stop_recording(self):
         self.capture_thread.stop()
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.update_status("Stopped recording")
+        self.recording_stopped.emit()
 
     def update_status(self, status: str):
         self.status_label.setText(f"Status: {status}")
+        if "Recording" in status:
+            self.status_label.setStyleSheet("font-weight: bold; color: red;")
+        else:
+            self.status_label.setStyleSheet("font-weight: bold; color: green;")
 
     def update_stats(self):
         # Calculate storage usage
@@ -378,6 +398,7 @@ class MainWindow(QMainWindow):
         self.settings["capture"]["fps"] = self.fps_spinbox.value()
         self.settings["capture"]["quality"] = self.quality_spinbox.value()
         self.settings["capture"]["max_storage_mb"] = self.storage_limit_spinbox.value()
+        self.settings["capture"]["monitor"] = self.monitor_spinbox.value()
         
         excluded_text = self.exclude_apps_text.toPlainText()
         self.settings["privacy"]["exclude_apps"] = [app.strip() for app in excluded_text.split("\n") if app.strip()]
