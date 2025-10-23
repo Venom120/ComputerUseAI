@@ -1,0 +1,52 @@
+{
+  "capture": {
+    "fps": 3,
+    "quality": 75,
+    "max_storage_mb": 1000,
+    "screenshot_format": "webp",
+    "max_keep_days": 7,
+    "monitors": "all",
+    "resolution_cap": 1080,
+    "change_threshold": 0.1
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "segment_seconds": 30,
+    "use_vad": true
+  },
+  "stt": {
+    "engine": "whispercpp",
+    "model": "ggml-base.bin",
+    "device": "cpu"
+  },
+  "ocr": {
+    "engine": "tesseract",
+    "language": "eng"
+  },
+  "llm": {
+    "engine": "llama_cpp",
+    "model": "Phi-3-mini-4k-instruct-q4.gguf",
+    "context_size": 2048,
+    "temperature": 0.3
+  },
+  "storage": {
+    "database_path": "data/app.db",
+    "captures_dir": "data/captures",
+    "audio_dir": "data/audio",
+    "screens_dir": "data/screens",
+    "encrypt_at_rest": false
+  },
+  "privacy": {
+    "exclude_apps": [
+      "1Password",
+      "KeePass",
+      "Bitwarden"
+    ]
+  },
+  "ui": {
+    "start_minimized": true,
+    "enable_tray": true
+  }
+}
+

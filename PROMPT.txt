@@ -1,0 +1,2 @@
+- save 1min of video then process it and then delete the video, which will save storage.
+- add a option for selecting which screen to record or a particular window also.

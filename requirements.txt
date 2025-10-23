@@ -1,0 +1,43 @@
+PyQt6==6.7.1
+pyqt6-qt6>=6.7.0
+pyqt6-sip>=13.6.0
+
+numpy>=1.26.0
+opencv-python>=4.10.0.84
+mss>=9.0.1
+Pillow>=10.4.0
+pyautogui>=0.9.54
+pynput>=1.7.7
+psutil>=6.0.0
+pywin32>=306; platform_system=="Windows"
+
+sounddevice>=0.5.0
+# webrtcvad>=2.0.10; platform_system=="Windows"  # Requires C++ build tools, using alternative
+PyAudio>=0.2.14; platform_system!="Linux"  # On Linux, prefer sounddevice
+soundfile>=0.12.1
+
+faster-whisper>=1.0.3
+whispercpp>=0.0.16
+
+pytesseract>=0.3.13
+easyocr>=1.7.2
+
+# llama-cpp-python>=0.2.90  # Requires C++ build tools, using alternative
+transformers>=4.45.0
+sentence-transformers>=3.1.1
+scikit-learn>=1.5.2
+
+sqlalchemy>=2.0.35
+alembic>=1.13.2
+aiosqlite>=0.20.0
+
+cryptography>=43.0.1
+pyyaml>=6.0.2
+orjson>=3.10.7
+loguru>=0.7.2
+tenacity>=9.0.0
+typer>=0.12.5
+rich>=13.9.2
+
+pyinstaller>=6.10.0
+
