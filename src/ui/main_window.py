@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import time
+import logging
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -34,9 +35,15 @@ from PyQt6.QtWidgets import (
 from ..utils import human_size, load_json, save_json
 from ..storage.database import initialize_database
 from ..automation.executor import WorkflowExecutor
+from ..capture.screen_capture import ScreenCapture, ScreenCaptureConfig
+from ..capture.audio_capture import AudioCapture, AudioCaptureConfig
+from ..capture.event_tracker import EventTracker, EventTrackerConfig
+from ..processing.pipeline import ProcessingPipeline
+
+logger = logging.getLogger(__name__)
 
 
-class CaptureThread(QThread):
+class RecordingTimerThread(QThread):
     status_updated = pyqtSignal(str)
     
     def __init__(self):
@@ -66,8 +73,20 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.workflow_executor = WorkflowExecutor()
-        self.capture_thread = CaptureThread()
-        self.capture_thread.status_updated.connect(self.update_status)
+        
+        self.timer_thread = RecordingTimerThread()
+        self.timer_thread.status_updated.connect(self.update_status)
+        
+        # Placeholders for capture objects and threads
+        self.screen_capture: Optional[ScreenCapture] = None
+        self.audio_capture: Optional[AudioCapture] = None
+        self.event_tracker: Optional[EventTracker] = None
+        self.processing_pipeline: Optional[ProcessingPipeline] = None
+        
+        self.screen_thread: Optional[QThread] = None
+        self.audio_thread: Optional[QThread] = None
+        self.event_thread: Optional[QThread] = None
+        self.processing_thread: Optional[QThread] = None
         
         self.setWindowTitle("ComputerUseAI")
         self.setMinimumSize(1000, 700)
@@ -334,18 +353,129 @@ class MainWindow(QMainWindow):
         return root
 
     def start_recording(self):
-        self.capture_thread.start()
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.update_status("Starting recording...")
-        self.recording_started.emit()
+        try:
+            # 1. Load settings
+            cap_settings = self.settings.get("capture", {})
+            aud_settings = self.settings.get("audio", {})
+            stor_settings = self.settings.get("storage", {})
+            
+            # 2. Create Configs
+            screen_config = ScreenCaptureConfig(
+                fps=cap_settings.get("fps", 3),
+                quality=cap_settings.get("quality", 70),
+                change_threshold=cap_settings.get("change_threshold", 0.1),
+                resolution_cap=cap_settings.get("resolution_cap", 1080),
+                format=cap_settings.get("screenshot_format", "webp"),
+                monitor=cap_settings.get("monitor", 0),
+                capture_mode=cap_settings.get("capture_mode", "images"),
+                video_segment_sec=cap_settings.get("video_segment_sec", 60),
+                video_codec=cap_settings.get("video_codec", "mp4v"),
+            )
+            
+            audio_config = AudioCaptureConfig(
+                sample_rate=aud_settings.get("sample_rate", 16000),
+                channels=aud_settings.get("channels", 1),
+                segment_seconds=aud_settings.get("segment_seconds", 30),
+                use_vad=aud_settings.get("use_vad", True),
+                device=aud_settings.get("device", None),
+            )
+            
+            event_config = EventTrackerConfig(
+                log_path=Path("data/logs/events.jsonl") # Log events to a file
+            )
+            
+           # 3. Create Capture Objects
+            screens_dir = stor_settings.get("screens_dir", "data/screens")
+            audio_dir = stor_settings.get("audio_dir", "data/audio")
+
+            self.screen_capture = ScreenCapture(screens_dir, screen_config)
+            self.audio_capture = AudioCapture(audio_dir, audio_config)
+            self.event_tracker = EventTracker(event_config)
+            
+            # 4. CREATE PROCESSING PIPELINE
+            self.processing_pipeline = ProcessingPipeline(self.settings)
+
+            # 5. Create and start threads
+            self.screen_thread = QThread()
+            self.screen_capture.moveToThread(self.screen_thread)
+            self.screen_thread.started.connect(self.screen_capture.start)
+            self.screen_thread.start()
+            logger.info("Screen capture thread started.")
+
+            self.audio_thread = QThread()
+            self.audio_capture.moveToThread(self.audio_thread)
+            self.audio_thread.started.connect(self.audio_capture.start)
+            self.audio_thread.start()
+            logger.info("Audio capture thread started.")
+
+            self.event_thread = QThread()
+            self.event_tracker.moveToThread(self.event_thread)
+            self.event_thread.started.connect(self.event_tracker.start)
+            logger.info("Event tracker thread started.")
+            
+            self.processing_thread = QThread()
+            self.processing_pipeline.moveToThread(self.processing_thread)
+            self.processing_thread.start()
+            logger.info("Processing pipeline thread started.")
+
+            # 6. CONNECT SIGNALS TO SLOTS
+            self.audio_capture.audio_file_ready.connect(self.processing_pipeline.process_audio)
+            self.screen_capture.video_file_ready.connect(self.processing_pipeline.process_video)
+            # self.processing_pipeline.workflow_detected.connect(self.on_workflow_detected)
+
+            # 7. Start UI timer and update UI
+            self.timer_thread.start()
+            
+        except Exception as e:
+            logger.exception("Failed to start recording: %s", e)
+            QMessageBox.critical(self, "Error", f"Failed to start recording: {e}")
+            # Rollback UI
+            self.stop_recording() # Call stop to clean up any partial starts
 
     def stop_recording(self):
-        self.capture_thread.stop()
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.update_status("Stopped recording")
-        self.recording_stopped.emit()
+        # Stop UI timer first
+        self.timer_thread.stop()
+        
+        # Stop backend threads
+        try:
+            if self.screen_capture:
+                self.screen_capture.stop()
+            if self.screen_thread:
+                self.screen_thread.quit()
+                self.screen_thread.wait(1000) # Wait 1s
+                logger.info("Screen capture thread stopped.")
+                
+            if self.audio_capture:
+                self.audio_capture.stop()
+            if self.audio_thread:
+                self.audio_thread.quit()
+                self.audio_thread.wait(1000) # Wait 1s
+                logger.info("Audio capture thread stopped.")
+                
+            if self.event_tracker:
+                self.event_tracker.stop()
+            if self.event_thread:
+                self.event_thread.quit()
+                self.event_thread.wait(1000) # Wait 1s
+                logger.info("Event tracker thread stopped.")
+        except Exception as e:
+            logger.error("Error stopping threads: %s", e)
+        finally:
+            # Reset objects
+            self.screen_capture = None
+            self.audio_capture = None
+            self.event_tracker = None
+            self.screen_thread = None
+            self.audio_thread = None
+            self.event_thread = None
+            self.processing_pipeline = None
+            self.processing_thread = None
+
+            # Update UI
+            self.start_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            self.update_status("Stopped recording")
+            self.recording_stopped.emit()
 
     def update_status(self, status: str):
         self.status_label.setText(f"Status: {status}")
@@ -362,7 +492,8 @@ class MainWindow(QMainWindow):
                 if path.is_file():
                     total_size += path.stat().st_size
             self.storage_label.setText(f"Storage usage: {human_size(total_size)}")
-        except:
+        except Exception as e:
+            logger.warning("Could not calculate storage size: %s", e)
             self.storage_label.setText("Storage usage: Unknown")
         
         # Update workflow count
@@ -413,15 +544,19 @@ class MainWindow(QMainWindow):
 
     def save_settings(self):
         # Update settings with current values
-        self.settings["capture"]["fps"] = self.fps_spinbox.value()
-        self.settings["capture"]["quality"] = self.quality_spinbox.value()
-        self.settings["capture"]["max_storage_mb"] = self.storage_limit_spinbox.value()
-        self.settings["capture"]["monitor"] = self.monitor_spinbox.value()
-        
-        excluded_text = self.exclude_apps_text.toPlainText()
-        self.settings["privacy"]["exclude_apps"] = [app.strip() for app in excluded_text.split("\n") if app.strip()]
-        
-        # Save to file
-        save_json(Path("config/settings.json"), self.settings)
-        QMessageBox.information(self, "Settings", "Settings saved successfully")
-
+        try:
+            self.settings["capture"]["fps"] = self.fps_spinbox.value()
+            self.settings["capture"]["quality"] = self.quality_spinbox.value()
+            self.settings["capture"]["max_storage_mb"] = self.storage_limit_spinbox.value()
+            self.settings["capture"]["monitor"] = self.monitor_spinbox.value()
+            
+            excluded_text = self.exclude_apps_text.toPlainText()
+            self.settings["privacy"]["exclude_apps"] = [app.strip() for app in excluded_text.split("\n") if app.strip()]
+            
+            # Save to file
+            config_path = Path("config/settings.json")
+            save_json(config_path, self.settings)
+            QMessageBox.information(self, "Settings", f"Settings saved to {config_path.resolve()}")
+        except Exception as e:
+            logger.exception("Failed to save settings: %s", e)
+            QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")

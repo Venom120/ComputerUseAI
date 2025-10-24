@@ -56,12 +56,10 @@ class TrayIcon(QObject):
     
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            logger.debug("Tray icon double-clicked.")
-            self.show_window.emit()
+            show_action = QAction("Show Window")
+            show_action.triggered.connect(self.show_window.emit)
             
-        elif reason == QSystemTrayIcon.ActivationReason.Context: # This is a right-click
-            logger.debug("Tray icon right-clicked, dynamically building menu.")
-            
+        elif reason == QSystemTrayIcon.ActivationReason.Context: # This is a right-click            
             # --- Dynamically create the menu every time ---
             menu = QMenu()
             

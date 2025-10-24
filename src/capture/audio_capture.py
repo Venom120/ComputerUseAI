@@ -10,6 +10,7 @@ from typing import Optional
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
+from PyQt6.QtCore import QObject, pyqtSignal
 
 # webrtcvad = None  # Disabled due to build requirements
 
@@ -25,10 +26,15 @@ class AudioCaptureConfig:
     channels: int = 1
     segment_seconds: int = 30
     use_vad: bool = True
+    device: Optional[int] = None
 
 
-class AudioCapture:
+class AudioCapture(QObject):
+
+    audio_file_ready = pyqtSignal(str)
+    
     def __init__(self, output_dir: str | Path, config: AudioCaptureConfig) -> None:
+        super().__init__()
         self.output_dir = Path(output_dir)
         self.config = config
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -49,6 +55,7 @@ class AudioCapture:
             channels=self.config.channels,
             samplerate=self.config.sample_rate,
             callback=self._callback,
+            device=self.config.device
         )
         self._stream.start()
         logger.info("Audio capture started @ %d Hz", self.config.sample_rate)
@@ -72,6 +79,8 @@ class AudioCapture:
                     sf.write(path, buf, self.config.sample_rate, subtype="PCM_16")
                     logger.debug("Saved audio segment %s", path.name)
                     segment = []
+
+                    self.audio_file_ready.emit(str(path))
         except queue.Empty:
             pass
         except Exception as e:
@@ -102,5 +111,3 @@ class AudioCapture:
                 self._stream.close()
         finally:
             self._stream = None
-
-

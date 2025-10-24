@@ -64,24 +64,28 @@ class SpeechToText:
                 )
 
             if self.config.engine == "whispercpp":
-                segments = []
+                segments_data = []
                 # whispercpp's transcribe method expects a numpy array and returns an iterable of (start, end, text)
-                for start, end, text in self._engine.transcribe(audio_data):
-                    segments.append({"start": start, "end": end, "text": text})
-                full_text = " ".join(s["text"] for s in segments).strip()
-                return {"text": full_text, "confidence": 0.8, "timestamps": segments}
+                for start, end, text in self._engine.transcribe(audio_data): # type: ignore
+                    segments_data.append({"start": start, "end": end, "text": text})
+                full_text = " ".join(s["text"] for s in segments_data).strip()
+                return {"text": full_text, "confidence": 0.8, "timestamps": segments_data}
             else:
                 # faster-whisper
                 # faster-whisper's transcribe method expects a numpy array and returns a generator of Segment objects and an info object
-                segments_generator, info = self._engine.transcribe(audio_data)
-                segments = [
-                    {"start": s.start, "end": s.end, "text": s.text}
-                    for s in segments_generator
-                ]
-                full_text = " ".join(s["text"] for s in segments).strip()
-                return {"text": full_text, "confidence": getattr(info, "language_probability", 0.8), "timestamps": segments}
+                segments_generator, info = self._engine.transcribe(audio_data) # type: ignore
+                
+                segments_data = []
+                segment_texts = []
+                # Iterate over the generator to build segments list and text list
+                for s in segments_generator: # type: ignore
+                    segments_data.append({"start": s.start, "end": s.end, "text": s.text}) # type: ignore
+                    segment_texts.append(s.text) # type: ignore
+                
+                # Join the texts collected during iteration
+                full_text = " ".join(segment_texts).strip()
+                
+                return {"text": full_text, "confidence": getattr(info, "language_probability", 0.8), "timestamps": segments_data}
         except Exception as e:
             logger.exception("STT error: %s", e)
             return {"text": "", "confidence": 0.0, "timestamps": []}
-
-

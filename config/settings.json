@@ -17,7 +17,8 @@
     "sample_rate": 16000,
     "channels": 1,
     "segment_seconds": 30,
-    "use_vad": true
+    "use_vad": true,
+    "device": 15
   },
   "stt": {
     "engine": "whispercpp",

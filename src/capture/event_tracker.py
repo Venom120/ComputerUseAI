@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import logging
+from PyQt6.QtCore import QObject
 
 logger = logging.getLogger(__name__)
 from pynput import keyboard, mouse
@@ -27,8 +28,9 @@ class EventTrackerConfig:
     log_path: Path
 
 
-class EventTracker:
+class EventTracker(QObject):
     def __init__(self, config: EventTrackerConfig) -> None:
+        super().__init__()
         self.config = config
         self.config.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._mouse_listener = None
@@ -94,5 +96,3 @@ class EventTracker:
             except Exception:
                 pass
         logger.info("Event tracker stopped")
-
-

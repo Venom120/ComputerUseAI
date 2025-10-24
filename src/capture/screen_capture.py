@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 import logging
 import cv2  # Import OpenCV
+from PyQt6.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,12 @@ class ScreenCaptureConfig:
     video_codec: str = "mp4v"
 
 
-class ScreenCapture:
+class ScreenCapture(QObject):
+
+    video_file_ready = pyqtSignal(str)
+
     def __init__(self, output_dir: str | Path, config: ScreenCaptureConfig) -> None:
+        super().__init__()
         self.output_dir = Path(output_dir)
         self.config = config
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -120,18 +125,15 @@ class ScreenCapture:
 
     def process_and_delete_video(self, video_path: Path):
         """
-        Placeholder for processing the video and then deleting it.
-        This should be run in a separate thread to avoid blocking capture.
+        This hook is called when a video segment is finished.
+        Instead of processing, it emits a signal for the pipeline.
+        The pipeline will be responsible for deletion.
         """
-        logger.info("Processing video: %s", video_path)
-        # TODO: Add video processing logic here
+        logger.info(f"Screen capture finished segment: {video_path}")
+        self.video_file_ready.emit(str(video_path))
         
-        # After processing, delete the file
-        try:
-            video_path.unlink()
-            logger.info("Deleted video: %s", video_path)
-        except Exception as e:
-            logger.error("Failed to delete video %s: %s", video_path, e)
+        # NOTE: We REMOVE the deletion logic from here.
+        # The processing pipeline will delete the file.
 
 
     def start(self) -> None:
