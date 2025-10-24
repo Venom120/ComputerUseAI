@@ -69,9 +69,11 @@ class MainWindow(QMainWindow):
     recording_started = pyqtSignal()
     recording_stopped = pyqtSignal()
 
-    def __init__(self, settings: Dict[str, Any]):
+    # Accept project_root in the constructor
+    def __init__(self, settings: Dict[str, Any], project_root: Path):
         super().__init__()
         self.settings = settings
+        self.project_root = project_root  # Store the root path
         self.workflow_executor = WorkflowExecutor()
         
         self.timer_thread = RecordingTimerThread()
@@ -393,7 +395,7 @@ class MainWindow(QMainWindow):
             self.event_tracker = EventTracker(event_config)
             
             # 4. CREATE PROCESSING PIPELINE
-            self.processing_pipeline = ProcessingPipeline(self.settings)
+            self.processing_pipeline = ProcessingPipeline(self.settings, self.project_root)
 
             # 5. Create and start threads
             self.screen_thread = QThread()

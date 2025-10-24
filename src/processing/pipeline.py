@@ -22,13 +22,18 @@ class ProcessingPipeline(QObject):
     # Signal to update the UI with a new workflow
     workflow_detected = pyqtSignal(dict)
     
-    def __init__(self, settings: dict):
+    # Accept project_root in the constructor
+    def __init__(self, settings: dict, project_root: Path):
         super().__init__()
         self.settings = settings
+        self.project_root = project_root  # Store the root path
         
         # Initialize all processing components
+        
+        # Correctly read the STT model *name* (e.g., "base") from settings.
+        stt_model_name = settings.get("stt", {}).get("model", "base")
         self.stt = SpeechToText(STTConfig(
-            model_path=Path(settings.get("stt", {}).get("model_path", "models/whisper-base.bin"))
+            model_path=Path(stt_model_name)
         ))
         
         self.ocr = OCREngine(OCRConfig(
@@ -37,8 +42,13 @@ class ProcessingPipeline(QObject):
         
         self.screen_analyzer = ScreenAnalyzer(ScreenAnalyzerConfig())
         
+        # Get the LLM model *name* from settings
+        llm_model_name = settings.get("llm", {}).get("model", "phi-3-mini-4k-instruct-q4.gguf")
+        # Always look for the LLM model inside the 'models' directory
+        # using the absolute project_root path
+        llm_model_path = self.project_root / "models" / llm_model_name 
         self.llm = LocalLLM(LLMConfig(
-            model_path=Path(settings.get("llm", {}).get("model_path", "models/phi-3-mini-4k-instruct-q4.gguf"))
+            model_path=llm_model_path
         ))
         
         # TODO: Initialize database connection
@@ -64,7 +74,11 @@ class ProcessingPipeline(QObject):
                 # session.close()
 
                 # 3. Delete file after processing
-                file_path.unlink()
+                try:
+                    file_path.unlink()
+                    logger.debug(f"Deleted audio file: {file_path_str}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete audio file {file_path_str}: {e}")
             else:
                 logger.warning(f"Audio file not found: {file_path_str}")
         except Exception as e:
@@ -88,7 +102,11 @@ class ProcessingPipeline(QObject):
                 # self.run_analysis()
                 
                 # 3. Delete file after processing
-                file_path.unlink()
+                try:
+                    file_path.unlink()
+                    logger.debug(f"Deleted video file: {file_path_str}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete video file {file_path_str}: {e}")
             else:
                 logger.warning(f"Video file not found: {file_path_str}")
         except Exception as e:

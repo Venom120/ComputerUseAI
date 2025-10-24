@@ -10,12 +10,20 @@ from .utils import configure_logging, load_json, ensure_dirs
 from .ui.main_window import MainWindow
 from .ui.tray_icon import TrayIcon
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> int:
-    ensure_dirs("data", "data/captures", "data/audio", "data/screens", "data/logs")
-    configure_logging()
+    # Use the absolute project root path
+    ensure_dirs(
+        PROJECT_ROOT / "data", 
+        PROJECT_ROOT / "data/captures", 
+        PROJECT_ROOT / "data/audio", 
+        PROJECT_ROOT / "data/screens", 
+        PROJECT_ROOT / "data/logs"
+    )
+    configure_logging(PROJECT_ROOT / "data/logs")
 
-    settings = load_json(Path(__file__).parents[1] / "config" / "settings.json")
+    settings = load_json(PROJECT_ROOT / "config" / "settings.json")
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Keep running when window is closed
@@ -26,7 +34,7 @@ def main() -> int:
         return 1
     
     # Create main window
-    window = MainWindow(settings)
+    window = MainWindow(settings, PROJECT_ROOT)
     
     # Create tray icon
     tray_icon = TrayIcon()

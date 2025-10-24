@@ -31,7 +31,7 @@
   },
   "llm": {
     "engine": "llama_cpp",
-    "model": "Phi-3-mini-4k-instruct-q4.gguf",
+    "model": "phi-3-mini-4k-instruct-q4.gguf",
     "context_size": 2048,
     "temperature": 0.3
   },
