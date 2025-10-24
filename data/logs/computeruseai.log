@@ -1,0 +1,9 @@
+2025-10-24 23:33:49,644 - src.ui.tray_icon - DEBUG - Initializing TrayIcon...
+2025-10-24 23:33:49,651 - src.ui.tray_icon - DEBUG - TrayIcon initialized successfully.
+2025-10-24 23:33:49,652 - src.ui.tray_icon - INFO - Showing system tray icon.
+2025-10-24 23:34:11,679 - src.ui.tray_icon - DEBUG - Set recording state: True
+2025-10-24 23:34:11,680 - src.ui.tray_icon - DEBUG - Set recording state: True
+2025-10-24 23:36:08,155 - src.ui.tray_icon - DEBUG - Tray icon right-clicked, dynamically building menu.
+2025-10-24 23:36:15,761 - src.ui.tray_icon - DEBUG - Set recording state: False
+2025-10-24 23:36:15,761 - src.ui.tray_icon - DEBUG - Set recording state: False
+2025-10-24 23:44:37,096 - src.ui.tray_icon - DEBUG - Tray icon right-clicked, dynamically building menu.

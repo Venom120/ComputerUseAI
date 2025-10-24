@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+import numpy as np
+import soundfile as sf
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,7 +30,7 @@ class SpeechToText:
             try:
                 from whispercpp import Whisper  # type: ignore
 
-                self._engine = Whisper(self.config.model_path.as_posix())
+                self._engine = Whisper.from_pretrained(self.config.model_path.as_posix())
                 logger.info("Initialized Whisper.cpp with %s", self.config.model_path)
             except Exception as e:
                 logger.warning("Failed to init whispercpp: %s", e)
@@ -47,18 +50,33 @@ class SpeechToText:
             return {"text": "", "confidence": 0.0, "timestamps": []}
 
         try:
+            audio_data, read_sample_rate = sf.read(audio_path.as_posix(), dtype="float32")
+            audio_data = np.array(audio_data, dtype=np.float32) # Explicitly ensure float32
+
+            if read_sample_rate != self.config.sample_rate:
+                # Resample if necessary (though whisper models usually expect 16kHz)
+                # For simplicity, we'll assume the audio is already 16kHz or handle it externally
+                logger.warning(
+                    "Audio sample rate %d Hz does not match expected %d Hz. "
+                    "This might lead to poor transcription quality.",
+                    read_sample_rate,
+                    self.config.sample_rate,
+                )
+
             if self.config.engine == "whispercpp":
                 segments = []
-                for (start, end, text) in self._engine.transcribe(audio_path.as_posix()):
+                # whispercpp's transcribe method expects a numpy array and returns an iterable of (start, end, text)
+                for start, end, text in self._engine.transcribe(audio_data):
                     segments.append({"start": start, "end": end, "text": text})
                 full_text = " ".join(s["text"] for s in segments).strip()
                 return {"text": full_text, "confidence": 0.8, "timestamps": segments}
             else:
                 # faster-whisper
-                segments_out, info = self._engine.transcribe(audio_path.as_posix())
+                # faster-whisper's transcribe method expects a numpy array and returns a generator of Segment objects and an info object
+                segments_generator, info = self._engine.transcribe(audio_data)
                 segments = [
                     {"start": s.start, "end": s.end, "text": s.text}
-                    for s in segments_out
+                    for s in segments_generator
                 ]
                 full_text = " ".join(s["text"] for s in segments).strip()
                 return {"text": full_text, "confidence": getattr(info, "language_probability", 0.8), "timestamps": segments}

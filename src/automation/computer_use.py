@@ -33,7 +33,7 @@ class ComputerUse:
             logger.error("Click failed at (%d, %d): %s", x, y, e)
             return False
 
-    def type_text(self, text: str, interval: float = None) -> bool:
+    def type_text(self, text: str, interval: float | None = None) -> bool:
         try:
             interval = interval or self.config.type_delay
             pyautogui.typewrite(text, interval=interval)

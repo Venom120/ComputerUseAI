@@ -58,7 +58,7 @@ class WorkflowExecutor:
             logger.error("Failed to load workflow: %s", e)
             return []
 
-    def execute_workflow(self, workflow_id: str, steps: List[WorkflowStep], parameters: Dict[str, Any] = None) -> ExecutionResult:
+    def execute_workflow(self, workflow_id: str, steps: List[WorkflowStep], parameters: Dict[str, Any] | None = None) -> ExecutionResult:
         """Execute a workflow with the given steps"""
         if self._running:
             return ExecutionResult(False, "Another workflow is already running")
@@ -127,6 +127,7 @@ class WorkflowExecutor:
                     step.target["x"], 
                     step.target["y"]
                 )
+            return False
         
         elif action_type == "type":
             text = str(step.target)
@@ -139,6 +140,7 @@ class WorkflowExecutor:
         elif action_type == "key_combination":
             if isinstance(step.target, list):
                 return self.computer_use.press_key_combination(step.target)
+            return False
         
         elif action_type == "scroll":
             clicks = int(step.target) if isinstance(step.target, (int, str)) else 3
