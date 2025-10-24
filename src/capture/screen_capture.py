@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import mss
+from mss.base import MSSBase
 import numpy as np
 from PIL import Image
 import logging
@@ -40,7 +41,7 @@ class ScreenCapture(QObject):
         self.config = config
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._previous_frame: Optional[np.ndarray] = None
-        self._mss = mss.mss()
+        self._mss: Optional[MSSBase] = None
         self._running = False
         self._video_writer: Optional[cv2.VideoWriter] = None
         self._segment_start_time: float = 0.0
@@ -62,6 +63,13 @@ class ScreenCapture(QObject):
         return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
     def _grab(self) -> np.ndarray:
+
+        # Add a check to ensure mss is initialized
+        if not self._mss:
+            logger.error("mss object is not initialized. Cannot grab frame.")
+            # Return an empty frame to avoid a None crash
+            return np.zeros((100, 100, 3), dtype=np.uint8)
+
         monitor_index = self.config.monitor
         if monitor_index < 0 or monitor_index >= len(self._mss.monitors):
             logger.warning("Invalid monitor index %d, falling back to all screens (0)", monitor_index)
@@ -101,6 +109,11 @@ class ScreenCapture(QObject):
         self._current_video_path = self.output_dir / f"video_{ts}.mp4"
         fourcc = cv2.VideoWriter.fourcc(*self.config.video_codec)
         h, w = frame.shape[:2]
+        
+        if not self._mss: # Safety check
+             logger.error("mss not initialized, cannot start video segment.")
+             return
+
         self._video_writer = cv2.VideoWriter(
             str(self._current_video_path), fourcc, self.config.fps, (w, h)
         )
@@ -113,8 +126,6 @@ class ScreenCapture(QObject):
             self._video_writer = None
             logger.info("Completed video segment: %s", self._current_video_path)
             
-            # --- PROCESSING HOOK ---
-            # This is where you would trigger processing and deletion
             if self._current_video_path:
                 logger.debug("Calling process_and_delete_video for %s", self._current_video_path)
                 self.process_and_delete_video(self._current_video_path)
@@ -124,19 +135,18 @@ class ScreenCapture(QObject):
             self._current_video_path = None
 
     def process_and_delete_video(self, video_path: Path):
-        """
-        This hook is called when a video segment is finished.
-        Instead of processing, it emits a signal for the pipeline.
-        The pipeline will be responsible for deletion.
-        """
         logger.info(f"Screen capture finished segment: {video_path}")
         self.video_file_ready.emit(str(video_path))
-        
-        # NOTE: We REMOVE the deletion logic from here.
-        # The processing pipeline will delete the file.
 
 
     def start(self) -> None:
+        try:
+            self._mss = mss.mss() 
+        except Exception as e:
+            logger.exception(f"Failed to initialize mss: {e}")
+            self._running = False # Prevent loop from starting
+            return
+
         self._running = True
         ensure_dirs(self.output_dir)
         interval = 1.0 / max(1, self.config.fps)
@@ -175,6 +185,8 @@ class ScreenCapture(QObject):
         finally:
             if self._video_writer:
                 self._stop_video_segment() # Save final segment
+            if self._mss:
+                self._mss.close()
             logger.info("Screen capture stopped")
             self._running = False
 

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import json, sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+try:
+    from llama_cpp import Llama
+except ImportError:
+    logger.error("llama-cpp-python not installed. Please run 'pip install llama-cpp-python'")
+    sys.exit()
 
 
 @dataclass
@@ -19,67 +26,87 @@ class LLMConfig:
 class LocalLLM:
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
-        self._llm = None
+        self._llm: Optional[Llama] = None
         self._init()
 
     def _init(self) -> None:
-        try:
-            from transformers import AutoTokenizer, AutoModelForCausalLM  # type: ignore
-            import torch
+        if Llama is None:
+            logger.error("Cannot initialize LLM: llama_cpp not imported.")
+            return
+            
+        model_file = self.config.model_path
+        if not model_file.exists():
+            logger.error(f"LLM model file not found: {model_file}")
+            logger.error("Please run 'python tools/model_setup.py' to download the model.")
+            return
 
-            # Use a smaller model that works with transformers
-            model_name = "microsoft/DialoGPT-small"  # Fallback to a smaller model
-            self._tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self._model = AutoModelForCausalLM.from_pretrained(model_name)
-            if self._tokenizer.pad_token is None:
-                self._tokenizer.pad_token = self._tokenizer.eos_token
-            self._llm = {"tokenizer": self._tokenizer, "model": self._model}
-            logger.info("LLM loaded: %s", model_name)
+        try:
+            self._llm = Llama(
+                model_path=str(model_file),
+                n_ctx=self.config.context_size,
+                n_threads=4, 
+                verbose=False
+            )
+            logger.info(f"LLM loaded successfully: {model_file.name}")
         except Exception as e:
-            logger.error("Failed to load LLM: %s", e)
+            logger.exception(f"Failed to load LLM model {model_file}: {e}")
 
     def analyze_workflow(self, screen_jsons: List[Dict[str, Any]], transcripts: List[str], events: List[Dict[str, Any]]) -> Dict[str, Any]:
         if self._llm is None:
+            logger.warning("LLM not loaded. Skipping workflow analysis.")
             return {"workflow_summary": "", "steps": [], "is_repetitive": False, "automation_potential": "low"}
+        
         prompt = self._build_prompt(screen_jsons, transcripts, events)
+        
         try:
-            inputs = self._llm["tokenizer"].encode(prompt, return_tensors="pt", truncation=True, max_length=1024)
-            with torch.no_grad():
-                outputs = self._llm["model"].generate(
-                    inputs,
-                    max_length=inputs.shape[1] + 100,
-                    temperature=self.config.temperature,
-                    do_sample=True,
-                    pad_token_id=self._llm["tokenizer"].eos_token_id
-                )
-            text = self._llm["tokenizer"].decode(outputs[0], skip_special_tokens=True)
-            # Extract only the new generated text
-            text = text[len(prompt):].strip()
+            chat_messages = [
+                {"role": "system", "content": "You are an expert AI assistant that analyzes user computer activity to understand their workflow. Respond ONLY with a valid JSON object matching the requested format."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._llm.create_chat_completion(
+                messages=chat_messages,  # type: ignore
+                temperature=self.config.temperature,
+                max_tokens=1024,
+            )
+            
+            content = response['choices'][0]['message']['content'] # type: ignore
+            if content is None:
+                logger.error("LLM returned an empty message (content is None).")
+                return {"workflow_summary": "LLM returned no content.", "steps": [], "is_repetitive": False, "automation_potential": "low"}
+            
+            text = content.strip()
+            
             return self._safe_json(text)
         except Exception as e:
-            logger.exception("LLM analysis error: %s", e)
+            logger.exception(f"LLM analysis error: {e}")
             return {"workflow_summary": "", "steps": [], "is_repetitive": False, "automation_potential": "low"}
 
     def _build_prompt(self, screen_jsons, transcripts, events) -> str:
         return (
-            "You are analyzing user computer activity to understand their workflow.\n\n"
-            f"Screen States:\n```json\n{screen_jsons}\n```\n\n"
-            f"Audio Commands:\n```\n{'\n'.join(transcripts)}\n```\n\n"
-            f"Event Log:\n```json\n{events}\n```\n\n"
-            "Task: Describe what the user did in clear steps. Identify if this is a repetitive pattern.\n"
-            "Format your response as JSON with keys workflow_summary, steps, is_repetitive, automation_potential."
+            "Analyze the following user activity logs. Based ONLY on this data, "
+            "describe the user's workflow, identify if it's repetitive, and "
+            "list the key steps.\n\n"
+            f"Screen States (brief summary):\n{json.dumps(screen_jsons, indent=2)}\n\n"
+            f"Audio Commands:\n{'\n'.join(transcripts)}\n\n"
+            f"Event Log:\n{json.dumps(events, indent=2)}\n\n"
+            "Respond with a single JSON object with keys: "
+            "\"workflow_summary\" (string), "
+            "\"steps\" (list of strings), "
+            "\"is_repetitive\" (boolean), "
+            "\"automation_potential\" (string: 'low', 'medium', 'high')."
         )
 
     def _safe_json(self, text: str) -> Dict[str, Any]:
         import json
 
         text = text.strip()
-        # Attempt to extract JSON
+        
         try:
-            if text.startswith("```)" ):
-                text = text.strip("` ")
-            return json.loads(text)
+            start = text.index('{')
+            end = text.rindex('}') + 1
+            json_text = text[start:end]
+            return json.loads(json_text)
         except Exception:
-            return {"workflow_summary": text[:200], "steps": [], "is_repetitive": False, "automation_potential": "low"}
-
-
+            logger.warning(f"LLM did not return valid JSON. Response was: {text}")
+            return {"workflow_summary": "LLM response was not valid JSON.", "steps": [], "is_repetitive": False, "automation_potential": "low"}

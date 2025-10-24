@@ -21,8 +21,8 @@
     "device": 15
   },
   "stt": {
-    "engine": "whispercpp",
-    "model": "ggml-base.bin",
+    "engine": "faster-whisper",
+    "model": "base",
     "device": "cpu"
   },
   "ocr": {

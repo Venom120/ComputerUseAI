@@ -24,14 +24,6 @@ def setup_models() -> None:
     models_dir = Path("./models")
     models_dir.mkdir(exist_ok=True)
 
-    whisper_model = models_dir / "whisper-base.bin"
-    if not whisper_model.exists():
-        print("Downloading Whisper model...")
-        download_file(
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-            whisper_model,
-        )
-
     llm_model = models_dir / "phi-3-mini-4k-instruct-q4.gguf"
     if not llm_model.exists():
         print("Downloading LLM model...")
@@ -49,4 +41,3 @@ def setup_models() -> None:
 
 if __name__ == "__main__":
     setup_models()
-

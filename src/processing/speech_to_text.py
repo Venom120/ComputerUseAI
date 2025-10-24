@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class STTConfig:
-    engine: str = "whispercpp"
-    model_path: Path = Path("models/whisper-base.bin")
+    engine: str = "faster-whisper"
+    model_path: Path = Path("base")  # This is now a model NAME, not a file
     sample_rate: int = 16000
 
 
@@ -26,23 +26,20 @@ class SpeechToText:
 
     def _init_engine(self) -> None:
         self._engine = None
-        if self.config.engine == "whispercpp":
-            try:
-                from whispercpp import Whisper  # type: ignore
 
-                self._engine = Whisper.from_pretrained(self.config.model_path.as_posix())
-                logger.info("Initialized Whisper.cpp with %s", self.config.model_path)
-            except Exception as e:
-                logger.warning("Failed to init whispercpp: %s", e)
-        if self._engine is None:
+        # It's more reliable and handles its own model downloading/caching.
+        if self.config.engine == "faster-whisper":
             try:
                 from faster_whisper import WhisperModel  # type: ignore
 
-                self._engine = WhisperModel(self.config.model_path.as_posix(), device="cpu")
-                logger.info("Initialized faster-whisper with %s", self.config.model_path)
-                self.config.engine = "faster-whisper"
+                # Use config.model_path.as_posix() to pass the model *name* (e.g., "base")
+                model_name = self.config.model_path.as_posix()
+                self._engine = WhisperModel(model_name, device="cpu")
+                logger.info(f"Initialized faster-whisper with model: {model_name}")
             except Exception as e:
-                logger.error("No STT engine available: %s", e)
+                logger.error(f"Failed to init faster-whisper with model {self.config.model_path}: {e}")
+        else:
+            logger.error(f"Unsupported STT engine: {self.config.engine}. Only 'faster-whisper' is supported in this fix.")
 
     def transcribe_file(self, audio_path: str | Path) -> Dict[str, Any]:
         audio_path = Path(audio_path)
@@ -63,29 +60,17 @@ class SpeechToText:
                     self.config.sample_rate,
                 )
 
-            if self.config.engine == "whispercpp":
-                segments_data = []
-                # whispercpp's transcribe method expects a numpy array and returns an iterable of (start, end, text)
-                for start, end, text in self._engine.transcribe(audio_data): # type: ignore
-                    segments_data.append({"start": start, "end": end, "text": text})
-                full_text = " ".join(s["text"] for s in segments_data).strip()
-                return {"text": full_text, "confidence": 0.8, "timestamps": segments_data}
-            else:
-                # faster-whisper
-                # faster-whisper's transcribe method expects a numpy array and returns a generator of Segment objects and an info object
-                segments_generator, info = self._engine.transcribe(audio_data) # type: ignore
-                
-                segments_data = []
-                segment_texts = []
-                # Iterate over the generator to build segments list and text list
-                for s in segments_generator: # type: ignore
-                    segments_data.append({"start": s.start, "end": s.end, "text": s.text}) # type: ignore
-                    segment_texts.append(s.text) # type: ignore
-                
-                # Join the texts collected during iteration
-                full_text = " ".join(segment_texts).strip()
-                
-                return {"text": full_text, "confidence": getattr(info, "language_probability", 0.8), "timestamps": segments_data}
+            segments_generator, info = self._engine.transcribe(audio_data)
+            
+            segments_data = []
+            segment_texts = []
+            for s in segments_generator:
+                segments_data.append({"start": s.start, "end": s.end, "text": s.text})
+                segment_texts.append(s.text)
+            
+            full_text = " ".join(segment_texts).strip()
+            
+            return {"text": full_text, "confidence": getattr(info, "language_probability", 0.8), "timestamps": segments_data}
         except Exception as e:
             logger.exception("STT error: %s", e)
             return {"text": "", "confidence": 0.0, "timestamps": []}
