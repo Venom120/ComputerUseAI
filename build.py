@@ -9,7 +9,7 @@ import sys
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Optional
 
 
 class Builder:
@@ -35,33 +35,52 @@ class Builder:
     
     def create_spec_file(self) -> Path:
         """Create PyInstaller spec file"""
-        spec_content = '''# -*- mode: python ; coding: utf-8 -*-
+        spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
+
+import sys
+from pathlib import Path
+
+# This is the project root, passed from the build script
+PROJECT_ROOT = r"{self.project_root.as_posix()}"
 
 block_cipher = None
 
 a = Analysis(
     ['src/main.py'],
-    pathex=[],
+    pathex=[PROJECT_ROOT],
     binaries=[],
     datas=[
-        ('config', 'config'),
-        ('models', 'models'),
+        (os.path.join(PROJECT_ROOT, 'config'), 'config'),
+        # (os.path.join(PROJECT_ROOT, 'models'), 'models'),
+        (os.path.join(PROJECT_ROOT, 'tools'), 'tools'),
+        (os.path.join(PROJECT_ROOT, 'assets'), 'assets'),
+        (os.path.join(PROJECT_ROOT, 'data'), 'data'),
+        (os.path.join(PROJECT_ROOT, 'migrations'), 'migrations'),
+        (os.path.join(PROJECT_ROOT, 'src'), 'src'), # Include src for relative imports
     ],
     hiddenimports=[
         'PyQt6.QtCore',
-        'PyQt6.QtGui', 
+        'PyQt6.QtGui',
         'PyQt6.QtWidgets',
         'mss',
         'sounddevice',
         'pytesseract',
-        'faster_whisper',
-        'transformers',
         'sqlalchemy',
+        'alembic', # Include alembic for migrations
+        'alembic.config',
+        'alembic.command',
+        'alembic.script',
+        'alembic.operations',
+        'numpy'
     ],
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={{}},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'torch',
+        'transformers',
+        'faster_whisper',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -90,15 +109,20 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/icon.ico' if os.path.exists('assets/icon.ico') else None,
+    icon=os.path.join(PROJECT_ROOT, 'assets/icon.ico') if sys.platform == 'win32' else \
+         os.path.join(PROJECT_ROOT, 'assets/icon.icns') if sys.platform == 'darwin' else \
+         os.path.join(PROJECT_ROOT, 'assets/icon.png'),
 )
 '''
         
         spec_path = self.project_root / "ComputerUseAI.spec"
+        print("--- Generated PyInstaller Spec Content ---")
+        print(spec_content)
+        print("----------------------------------------")
         spec_path.write_text(spec_content)
         return spec_path
     
-    def build_executable(self, platform: str = None):
+    def build_executable(self, platform: Optional[str] = None):
         """Build executable using PyInstaller"""
         print(f"Building executable for {platform or 'current platform'}...")
         
@@ -108,14 +132,16 @@ exe = EXE(
         # Build command
         cmd = [sys.executable, "-m", "PyInstaller", str(spec_file)]
         
-        if platform:
-            # Platform-specific options
-            if platform == "windows":
-                cmd.extend(["--onefile", "--windowed"])
-            elif platform == "macos":
-                cmd.extend(["--onefile", "--windowed"])
-            elif platform == "linux":
-                cmd.extend(["--onefile"])
+        # The --onefile and --windowed options are already in the spec file,
+        # so we don't need to pass them again on the command line.
+        # if platform:
+        #     # Platform-specific options
+        #     if platform == "windows":
+        #         cmd.extend(["--onefile", "--windowed"])
+        #     elif platform == "macos":
+        #         cmd.extend(["--onefile", "--windowed"])
+        #     elif platform == "linux":
+        #         cmd.extend(["--onefile"])
         
         # Run build
         result = subprocess.run(cmd, cwd=self.project_root, capture_output=True, text=True)
@@ -155,20 +181,33 @@ exe = EXE(
 RequestExecutionLevel admin
 InstallDir "$PROGRAMFILES\\${APPNAME}"
 Name "${APPNAME}"
-outFile "ComputerUseAI-Setup.exe"
+OutFile "ComputerUseAI-Setup.exe"
 
-!include LogicLib.nsh
+!include MUI2.nsh
 
-page directory
-page instfiles
+; Pages
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+; Languages
+!insertmacro MUI_LANGUAGE "English"
 
 section "install"
+    ; Request admin privileges for installation into Program Files
+    RequestExecutionLevel admin
     setOutPath $INSTDIR
     file "dist\\ComputerUseAI.exe"
     
     createDirectory "$SMPROGRAMS\\${APPNAME}"
     createShortCut "$SMPROGRAMS\\${APPNAME}\\${APPNAME}.lnk" "$INSTDIR\\ComputerUseAI.exe"
     createShortCut "$DESKTOP\\${APPNAME}.lnk" "$INSTDIR\\ComputerUseAI.exe"
+    
+    ; Add an option for the user to choose whether to create a desktop shortcut
+    ; This requires a custom page or a checkbox on an existing page.
+    ; For simplicity, I'll keep it as always creating for now, but this is where
+    ; more advanced NSIS scripting would go.
     
     writeUninstaller "$INSTDIR\\uninstall.exe"
     
@@ -206,46 +245,96 @@ sectionEnd
         return script_path
     
     def _create_macos_installer(self):
-        """Create macOS installer script"""
-        script = '''#!/bin/bash
+        """Create macOS installer script (DMG with instructions)"""
+        script = f'''#!/bin/bash
 # macOS installer script for ComputerUseAI
 
 APP_NAME="ComputerUseAI"
 APP_VERSION="1.0.0"
-DMG_NAME="ComputerUseAI-${APP_VERSION}.dmg"
-VOLUME_NAME="ComputerUseAI"
+DMG_NAME="${{APP_NAME}}-${{APP_VERSION}}.dmg"
+VOLUME_NAME="${{APP_NAME}} Installer"
+APP_BUNDLE_NAME="${{APP_NAME}}.app"
 
-# Create DMG
-hdiutil create -srcfolder "dist/ComputerUseAI.app" -volname "${VOLUME_NAME}" "${DMG_NAME}"
+echo "Creating macOS Disk Image for ${{APP_NAME}}..."
 
-echo "Created ${DMG_NAME}"
+# Ensure dist/{{APP_BUNDLE_NAME}} exists
+if [ ! -d "dist/${{APP_BUNDLE_NAME}}" ]; then
+    echo "Error: dist/${{APP_BUNDLE_NAME}} not found. Please build the macOS executable first."
+    exit 1
+fi
+
+# Create a temporary directory for DMG contents
+TMP_DIR=$(mktemp -d)
+mkdir -p "${{TMP_DIR}}/${{VOLUME_NAME}}"
+cp -r "dist/${{APP_BUNDLE_NAME}}" "${{TMP_DIR}}/${{VOLUME_NAME}}/"
+
+# Add a symlink to Applications folder
+ln -s /Applications "${{TMP_DIR}}/${{VOLUME_NAME}}/Applications"
+
+# Create the DMG
+hdiutil create -ov -fs HFS+ -srcfolder "${{TMP_DIR}}/${{VOLUME_NAME}}" -volname "${{VOLUME_NAME}}" "dist/${{DMG_NAME}}"
+
+# Clean up temporary directory
+rm -rf "${{TMP_DIR}}"
+
+echo "Created dist/${{DMG_NAME}}. Please open the DMG and drag ${{APP_BUNDLE_NAME}} to your Applications folder."
+echo "To create a desktop shortcut, drag the app from Applications to your Desktop."
 '''
-        
-        script_path = self.project_root / "create_dmg.sh"
+        script_path = self.project_root / "create_macos_dmg.sh"
         script_path.write_text(script)
         script_path.chmod(0o755)
         return script_path
     
     def _create_linux_installer(self):
-        """Create Linux AppImage script"""
-        script = '''#!/bin/bash
-# Linux AppImage creation script for ComputerUseAI
+        """Create Linux installer script (using a simple tar.gz and .desktop file)"""
+        script = f'''#!/bin/bash
+# Linux installer script for ComputerUseAI
 
 APP_NAME="ComputerUseAI"
 APP_VERSION="1.0.0"
-APPIMAGE_NAME="ComputerUseAI-${APP_VERSION}.AppImage"
+INSTALL_DIR="/opt/${{APP_NAME}}"
+DESKTOP_FILE_NAME="${{APP_NAME}}.desktop"
+APP_EXECUTABLE="${{INSTALL_DIR}}/ComputerUseAI"
 
-# Create AppImage using appimagetool
-if command -v appimagetool &> /dev/null; then
-    appimagetool dist/ComputerUseAI.AppDir "${APPIMAGE_NAME}"
-    echo "Created ${APPIMAGE_NAME}"
-else
-    echo "appimagetool not found. Please install it first."
-    exit 1
+echo "Preparing to install ${{APP_NAME}} version ${{APP_VERSION}}..."
+
+# Ask for installation directory
+read -p "Enter installation directory (default: ${{INSTALL_DIR}}): " USER_INSTALL_DIR
+if [ -n "$USER_INSTALL_DIR" ]; then
+    INSTALL_DIR="$USER_INSTALL_DIR"
 fi
+
+echo "Installing to: ${{INSTALL_DIR}}"
+
+# Create installation directory
+sudo mkdir -p "${{INSTALL_DIR}}"
+sudo cp -r dist/ComputerUseAI/* "${{INSTALL_DIR}}/"
+
+# Create .desktop file for application menu and desktop shortcut
+DESKTOP_CONTENT="[Desktop Entry]
+Version=1.0
+Type=Application
+Name=${{APP_NAME}}
+Comment=Desktop AI Assistant
+Exec=${{APP_EXECUTABLE}}
+Icon=${{INSTALL_DIR}}/assets/icon.png
+Terminal=false
+Categories=Utility;AI;
+"
+
+echo "${{DESKTOP_CONTENT}}" | sudo tee "/usr/share/applications/${{DESKTOP_FILE_NAME}}" > /dev/null
+
+# Ask to create desktop shortcut
+read -p "Create desktop shortcut? (y/N): " CREATE_SHORTCUT
+if [[ "$CREATE_SHORTCUT" =~ ^[Yy]$ ]]; then
+    cp "/usr/share/applications/${{DESKTOP_FILE_NAME}}" "${{HOME}}/Desktop/"
+    chmod +x "${{HOME}}/Desktop/${{DESKTOP_FILE_NAME}}"
+    echo "Desktop shortcut created."
+fi
+
+echo "Installation complete. You can find ${{APP_NAME}} in your applications menu."
 '''
-        
-        script_path = self.project_root / "create_appimage.sh"
+        script_path = self.project_root / "install_linux.sh"
         script_path.write_text(script)
         script_path.chmod(0o755)
         return script_path

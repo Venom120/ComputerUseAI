@@ -36,7 +36,7 @@
     "temperature": 0.3
   },
   "storage": {
-    "database_path": "data/app.db",
+    "database_path": "data/computeruseai.db",
     "captures_dir": "data/captures",
     "audio_dir": "data/audio",
     "screens_dir": "data/screens",

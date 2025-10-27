@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Iterable, Callable, Any
 from datetime import datetime, timezone, timedelta
 
 import logging
 
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select, func
 
-from src.storage.database import Capture, Event, initialize_database # Import necessary models and initializer
+from src.storage.database import Capture, Event # Import necessary models and initializer
 
 logger = logging.getLogger(__name__)
 

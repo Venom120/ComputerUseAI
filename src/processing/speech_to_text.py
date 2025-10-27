@@ -31,15 +31,25 @@ class SpeechToText:
         if self.config.engine == "faster-whisper":
             try:
                 from faster_whisper import WhisperModel  # type: ignore
+                import torch # Check for torch as well
+                import transformers # Check for transformers as well
 
                 # Use config.model_path.as_posix() to pass the model *name* (e.g., "base")
                 model_name = self.config.model_path.as_posix()
                 self._engine = WhisperModel(model_name, device="cpu")
                 logger.info(f"Initialized faster-whisper with model: {model_name}")
+            except ImportError:
+                logger.warning(
+                    "Faster-whisper or its dependencies (torch, transformers) not found. "
+                    "Speech-to-text functionality will be disabled. "
+                    "Please install them manually if needed (e.g., pip install faster-whisper torch transformers)."
+                )
+                self._engine = None
             except Exception as e:
                 logger.error(f"Failed to init faster-whisper with model {self.config.model_path}: {e}")
+                self._engine = None
         else:
-            logger.error(f"Unsupported STT engine: {self.config.engine}. Only 'faster-whisper' is supported in this fix.")
+            logger.error(f"Unsupported STT engine: {self.config.engine}. Only 'faster-whisper' is supported.")
 
     def transcribe_file(self, audio_path: str | Path) -> Dict[str, Any]:
         audio_path = Path(audio_path)
