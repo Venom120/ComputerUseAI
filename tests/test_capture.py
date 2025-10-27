@@ -1,3 +1,4 @@
+import numpy as np
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -39,15 +40,21 @@ class TestScreenCapture:
         with tempfile.TemporaryDirectory() as temp_dir:
             capture = ScreenCapture(temp_dir, config)
             
-            # Mock mss grab
+            # Mock mss grab to return a valid screenshot object
             mock_sct = Mock()
-            mock_sct.grab.return_value = Mock()
+            # Simulate a 100x100 BGRX image (common mss format)
+            mock_sct_img_data = np.zeros((100, 100, 4), dtype=np.uint8)
+            mock_sct_img_data[:, :, 0] = 255 # Blue channel
+            mock_sct_img_data[:, :, 3] = 255 # Alpha channel
+            
+            mock_sct.grab.return_value = mock_sct_img_data
             mock_sct.monitors = [{"top": 0, "left": 0, "width": 1920, "height": 1080}]
             capture._mss = mock_sct
             
             frame = capture._grab()
             assert frame is not None
-
+            assert frame.shape == (100, 100, 3) # Expecting BGR frame after processing
+            assert np.array_equal(frame[:, :, 0], np.ones((100, 100)) * 255) # Check blue channel
 
 class TestAudioCapture:
     def test_initialization(self):

@@ -31,9 +31,11 @@
 
 2. **Configure Settings**
    - Go to Settings tab
-   - Adjust capture quality (default: 75%)
-   - Set storage limits (default: 1GB)
+   - Adjust capture quality (default: 80%)
+   - Set storage limits (default: 10GB)
    - Configure privacy settings
+   - Adjust logging level (default: INFO)
+   - Application starts minimized (default: false)
 
 3. **Start Learning**
    - Click "Start Recording" in Dashboard
@@ -103,20 +105,21 @@ The main control center showing:
 **Capture Settings**:
 - **FPS**: Frames per second (1-10, default: 3)
 - **Quality**: Image compression (10-100%, default: 75%)
-- **Storage Limit**: Maximum storage usage (100MB-10GB)
-- **Resolution Cap**: Maximum capture resolution
+- **Storage Limit**: Maximum storage usage (100MB-10GB, default: 10GB)
+- **Resolution Cap**: Maximum capture resolution (default: 1080p)
 
 **Privacy Settings**:
 - **Excluded Apps**: Applications to never record
 - **Sensitive Windows**: Window titles to exclude
-- **Data Retention**: How long to keep recordings
-- **Encryption**: Enable encrypted storage
+- **Data Retention**: How long to keep recordings (default: 7 days for soft delete, 30 days for hard delete)
+- **Encryption**: Enable encrypted storage (default: disabled)
 
 **Performance Settings**:
 - **Processing Priority**: CPU usage allocation
 - **Memory Limits**: RAM usage limits
 - **Background Processing**: When to run AI analysis
-- **Model Selection**: Choose AI model size
+- **Model Selection**: Choose AI model size (e.g., Phi-3 Mini)
+- **Logging Level**: Set the verbosity of application logs (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
 ## Learning Workflows
 
@@ -128,11 +131,11 @@ The main control center showing:
    - Identifies repetitive sequences
    - Builds pattern recognition models
 
-2. **Learning Phase**
-   - AI processes captured data
-   - Extracts workflow patterns
-   - Generates step-by-step descriptions
-   - Calculates confidence scores
+- **Learning Phase**
+   - AI processes captured data (screens, audio transcripts, events)
+   - Extracts workflow patterns using the local LLM
+   - Generates step-by-step descriptions and identifies repetitive tasks
+   - Calculates confidence scores for automation potential
 
 3. **Validation Phase**
    - Review detected workflows
@@ -191,11 +194,11 @@ The main control center showing:
 
 ### Automation Modes
 
-**Automatic Mode**:
-- AI detects workflow patterns
-- Automatically executes when confident
-- No user intervention required
-- Best for highly repetitive tasks
+- **Automatic Mode**:
+  - AI continuously monitors activity and detects workflow patterns.
+  - Automatically executes the workflow when confidence meets the threshold.
+  - No user intervention required for execution.
+  - Best for highly repetitive and predictable tasks.
 
 **Semi-Automatic Mode**:
 - AI detects patterns
@@ -267,7 +270,8 @@ The main control center showing:
 - Check Python version (3.8+ required)
 - Verify all dependencies installed
 - Check system permissions
-- Review error logs
+- Review error logs (check `data/logs/computeruseai.log` for critical errors)
+- If a crash occurs, a message box with basic error info will appear. Check logs for full traceback.
 
 **Poor Workflow Detection**:
 - Increase recording time

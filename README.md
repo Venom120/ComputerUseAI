@@ -4,13 +4,13 @@ A privacy-first desktop AI assistant that observes your screen activity, learns 
 
 ## 🚀 Features
 
-- **Real-time Screen & Audio Capture** - Records your desktop activity with frame differencing optimization
-- **Local Speech-to-Text** - Transcribes audio using Whisper.cpp (completely offline)
-- **Computer Vision & OCR** - Understands screen content using Tesseract OCR
-- **Pattern Recognition** - Learns your workflows using local LLM (Phi-3 Mini)
-- **Task Automation** - Executes learned workflows automatically
-- **Privacy-First Design** - All processing happens locally, no cloud dependencies
-- **Cross-Platform** - Works on Windows, macOS, and Linux
+- **Real-time Screen & Audio Capture** - Records your desktop activity with frame differencing optimization, storing data in a local SQLite database.
+- **Local Speech-to-Text** - Transcribes audio using Whisper.cpp (completely offline) and saves transcripts to the database.
+- **Computer Vision & OCR** - Understands screen content using Tesseract OCR, with results stored in the database.
+- **Pattern Recognition** - Learns your workflows using a local LLM (Phi-3 Mini), identifying repetitive tasks and saving them as automatable workflows.
+- **Task Automation** - Executes learned workflows automatically based on detected patterns.
+- **Privacy-First Design** - All processing happens locally, with optional data encryption and automatic cleanup, ensuring no cloud dependencies.
+- **Cross-Platform** - Works on Windows, macOS, and Linux.
 
 ## 📋 Requirements
 
@@ -100,16 +100,17 @@ python -m src.main
 
 ### Settings
 
-- **Capture Settings**: FPS, quality, storage limits
-- **Privacy Settings**: Exclude specific applications from recording
-- **Automation Settings**: Confidence thresholds, execution preferences
+- **Capture Settings**: Configurable FPS, quality, storage limits, and monitor selection.
+- **Privacy Settings**: Exclude specific applications from recording, with optional data encryption at rest.
+- **Automation Settings**: Adjustable confidence thresholds and execution preferences for automated workflows.
+- **Logging Settings**: Control the verbosity of application logs.
 
 ### Privacy Controls
 
 - **Application Exclusion**: Blacklist sensitive applications (banking, messaging)
 - **Local Processing**: All AI processing happens on your device
-- **Data Encryption**: Optional encryption for stored data
-- **Auto-Cleanup**: Automatic deletion of old recordings
+- **Data Encryption**: Optional encryption for stored data, ensuring sensitive information is protected.
+- **Auto-Cleanup**: Automatic deletion of old recordings and management of storage limits, now with database-backed retention policies, to prevent excessive disk usage.
 
 ## 🏗️ Architecture
 
@@ -177,6 +178,7 @@ make build
 - **No Cloud Dependencies**: No data sent to external servers
 - **Encrypted Storage**: Optional encryption for sensitive data
 - **Application Exclusion**: Blacklist sensitive applications
+- **Robust Error Handling**: Global exception handling to prevent crashes and improve stability.
 - **Open Source**: Full source code available for audit
 
 ## 🤝 Contributing

@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import select
+
 from src.storage.database import initialize_database, Capture, Workflow, Event
 from src.storage.file_manager import FileManager
 from src.storage.cleanup import cleanup_old_files, cleanup_size_limit
@@ -49,9 +52,11 @@ class TestDatabaseIntegration:
             
             # Query the record
             result = session.query(Capture).first()
+            assert result is not None
             assert result.type == "screen"
             assert result.file_path == "test.png"
             assert result.size_bytes == 1024
+            assert result.metadata_json is not None
             assert result.metadata_json["quality"] == 75
             
             session.close()
@@ -80,9 +85,11 @@ class TestDatabaseIntegration:
             
             # Query the record
             result = session.query(Workflow).first()
+            assert result is not None
             assert result.name == "test_workflow"
             assert result.description == "Test workflow for data entry"
             assert result.success_rate == 0.95
+            assert result.pattern_json is not None
             assert result.pattern_json["steps"][0]["action"] == "click"
             
             session.close()
@@ -132,6 +139,13 @@ class TestFileManagerIntegration:
 
 
 class TestCleanupIntegration:
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.db_file = Path(tempfile.NamedTemporaryFile(suffix='.db', delete=False).name)
+        self.session_factory = initialize_database(self.db_file)
+        yield
+        self.db_file.unlink(missing_ok=True)
+
     def test_cleanup_old_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test files
@@ -149,7 +163,7 @@ class TestCleanupIntegration:
             os.utime(old_file, (old_time, old_time))
             
             # Run cleanup
-            removed = cleanup_old_files([temp_dir], max_age_days=7)
+            removed = cleanup_old_files(self.session_factory, [temp_dir], max_age_days=7)
             
             assert removed == 1
             assert not old_file.exists()
@@ -157,45 +171,62 @@ class TestCleanupIntegration:
 
     def test_cleanup_size_limit(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create test files with different sizes
-            file1 = Path(temp_dir) / "file1.txt"
-            file2 = Path(temp_dir) / "file2.txt"
-            file3 = Path(temp_dir) / "file3.txt"
-            
-            file1.write_text("a" * 100)  # 100 bytes
-            file2.write_text("b" * 200)  # 200 bytes
-            file3.write_text("c" * 300)  # 300 bytes
-            
-            # Total size is 600 bytes, limit to 400 bytes
-            removed = cleanup_size_limit(temp_dir, max_bytes=400)
-            
-            # Should remove the oldest files (file1 and file2)
-            assert removed == 2
-            assert not file1.exists()
-            assert not file2.exists()
-            assert file3.exists()
+            session = self.session_factory()
+            try:
+                # Create test files and corresponding Capture records
+                file1 = Path(temp_dir) / "file1.txt"
+                file2 = Path(temp_dir) / "file2.txt"
+                file3 = Path(temp_dir) / "file3.txt"
+                
+                file1.write_text("a" * 100)  # 100 bytes
+                file2.write_text("b" * 200)  # 200 bytes
+                file3.write_text("c" * 300)  # 300 bytes
+
+                # Create Capture records with distinct timestamps to ensure order
+                capture1 = Capture(type="test", file_path=str(file1), size_bytes=100, timestamp=datetime.now(timezone.utc) - timedelta(days=3))
+                capture2 = Capture(type="test", file_path=str(file2), size_bytes=200, timestamp=datetime.now(timezone.utc) - timedelta(days=2))
+                capture3 = Capture(type="test", file_path=str(file3), size_bytes=300, timestamp=datetime.now(timezone.utc) - timedelta(days=1))
+                
+                session.add_all([capture1, capture2, capture3])
+                session.commit()
+
+                # Total size is 600 bytes, limit to 400 bytes
+                # This should mark capture1 and capture2 as deleted in DB, and physically delete their files
+                removed = cleanup_size_limit(self.session_factory, temp_dir, max_bytes=400)
+                
+                # Should remove 2 files (capture1 and capture2)
+                assert removed == 2
+                assert not file1.exists()
+                assert not file2.exists()
+                assert file3.exists()
+
+                # Verify DB state
+                remaining_captures = session.execute(select(Capture).filter(Capture.deleted == False)).scalars().all()
+                assert len(remaining_captures) == 1
+                assert remaining_captures[0].file_path == str(file3)
+
+            finally:
+                session.close()
 
 
 class TestLLMIntegration:
-    @patch('src.intelligence.llm_interface.AutoTokenizer')
-    @patch('src.intelligence.llm_interface.AutoModelForCausalLM')
-    def test_llm_initialization(self, mock_model, mock_tokenizer):
+    @patch('src.intelligence.llm_interface.Llama')
+    def test_llm_initialization(self, mock_llama):
         config = LLMConfig()
         
-        # Mock the transformers components
-        mock_tokenizer_instance = Mock()
-        mock_tokenizer_instance.pad_token = None
-        mock_tokenizer_instance.eos_token = "<eos>"
-        mock_tokenizer.from_pretrained.return_value = mock_tokenizer_instance
-        
-        mock_model_instance = Mock()
-        mock_model.from_pretrained.return_value = mock_model_instance
+        # Mock the Llama class constructor
+        mock_llama_instance = Mock()
+        mock_llama.return_value = mock_llama_instance
         
         llm = LocalLLM(config)
         
         assert llm._llm is not None
-        assert "tokenizer" in llm._llm
-        assert "model" in llm._llm
+        mock_llama.assert_called_once_with(
+            model_path=str(config.model_path),
+            n_ctx=config.context_size,
+            n_threads=4,
+            verbose=False
+        )
 
     def test_analyze_workflow_no_llm(self):
         config = LLMConfig()
@@ -223,10 +254,10 @@ class TestLLMIntegration:
         
         prompt = llm._build_prompt(screen_jsons, transcripts, events)
         
-        assert "Screen States:" in prompt
+        assert "Screen States (brief summary):" in prompt
         assert "Audio Commands:" in prompt
         assert "Event Log:" in prompt
-        assert "workflow_summary" in prompt
+        assert '"workflow_summary"' in prompt # Check for the key in the expected JSON format
 
     def test_safe_json_parsing(self):
         config = LLMConfig()
@@ -240,7 +271,7 @@ class TestLLMIntegration:
         # Test invalid JSON
         invalid_json = "not json"
         result = llm._safe_json(invalid_json)
-        assert result["workflow_summary"] == "not json"
+        assert result["workflow_summary"] == "LLM response was not valid JSON."
 
 
 class TestWorkflowGeneratorIntegration:

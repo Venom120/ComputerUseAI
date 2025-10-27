@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 import time
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -16,19 +15,15 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTabWidget,
     QListWidget,
-    QListWidgetItem,
     QTextEdit,
     QSpinBox,
     QCheckBox,
-    QLineEdit,
     QGroupBox,
     QFormLayout,
     QProgressBar,
-    QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
     QMessageBox,
-    QFileDialog,
     QSlider,
 )
 
@@ -427,6 +422,9 @@ class MainWindow(QMainWindow):
 
             # 7. Start UI timer and update UI
             self.timer_thread.start()
+            self.start_btn.setEnabled(False)
+            self.stop_btn.setEnabled(True)
+            self.recording_started.emit()
             
         except Exception as e:
             logger.exception("Failed to start recording: %s", e)

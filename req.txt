@@ -82,6 +82,7 @@ PyQt6_sip==13.10.2
 PyRect==0.2.0
 PyScreeze==1.0.1
 pytesseract==0.3.13
+pytest==8.4.2
 python-bidi==0.6.7
 python-xlib==0.33
 python3-xlib==0.15
@@ -99,7 +100,8 @@ setuptools==80.9.0
 shapely==2.1.2
 shellingham==1.5.4
 six==1.17.0
- ==0.13.1
+sounddevice==0.5.3
+soundfile==0.13.1
 SQLAlchemy==2.0.44
 sympy==1.14.0
 tenacity==9.1.2

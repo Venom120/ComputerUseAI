@@ -1,4 +1,5 @@
-import pytest
+import numpy as np
+import numpy.testing
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,29 +16,53 @@ from src.processing.pattern_recognition import (
 
 class TestSpeechToText:
     def test_initialization(self):
-        config = STTConfig(model_path=Path("test_model.bin"))
+        config = STTConfig(model_path=Path("base")) # Use a valid model name
         stt = SpeechToText(config)
-        assert stt.config.model_path == Path("test_model.bin")
+        assert stt.config.model_path == Path("base")
 
-    @patch('src.processing.speech_to_text.Whisper')
-    def test_transcribe_file_whispercpp(self, mock_whisper):
-        config = STTConfig(engine="whispercpp")
+    @patch('src.processing.speech_to_text.sf.read')
+    @patch('src.processing.speech_to_text.SpeechToText._init_engine')
+    def test_transcribe_file_faster_whisper(self, mock_init_engine, mock_sf_read):
+        config = STTConfig(engine="faster-whisper", model_path=Path("base"))
         stt = SpeechToText(config)
         
-        # Mock the whisper instance
-        mock_instance = Mock()
-        mock_instance.transcribe.return_value = [
-            (0.0, 1.0, "Hello world"),
-            (1.0, 2.0, "How are you")
-        ]
-        stt._engine = mock_instance
+        # Ensure _init_engine is called but doesn't actually initialize the engine
+        mock_init_engine.assert_called_once()
+        
+        # Manually set a mock engine
+        mock_engine_instance = Mock()
+        stt._engine = mock_engine_instance
+        
+        # Mock soundfile.read
+        mock_sf_read.return_value = (np.zeros(16000, dtype=np.float32), 16000) # 1 second of silent audio
+        
+        mock_engine_instance.transcribe.return_value = (
+            [
+                Mock(start=0.0, end=1.0, text="Hello world"),
+                Mock(start=1.0, end=2.0, text="How are you")
+            ],
+            Mock(language_probability=0.9) # Mock info object
+        )
         
         with tempfile.NamedTemporaryFile(suffix=".wav") as temp_file:
             result = stt.transcribe_file(temp_file.name)
             
             assert result["text"] == "Hello world How are you"
             assert len(result["timestamps"]) == 2
-            assert result["confidence"] == 0.8
+            assert result["confidence"] == 0.9 # Check against mocked confidence
+            mock_sf_read.assert_called_once()
+            # Verify transcribe was called once
+            mock_engine_instance.transcribe.assert_called_once()
+            
+            # Get the actual argument passed to transcribe
+            actual_audio_data = mock_engine_instance.transcribe.call_args.args[0]
+            
+            # Assert properties of the numpy array
+            assert isinstance(actual_audio_data, np.ndarray)
+            assert actual_audio_data.shape == (16000,)
+            assert actual_audio_data.dtype == np.float32
+            # Assert content using numpy.testing.assert_array_equal
+            np.testing.assert_array_equal(actual_audio_data, np.zeros(16000, dtype=np.float32))
 
     def test_transcribe_file_no_engine(self):
         config = STTConfig()

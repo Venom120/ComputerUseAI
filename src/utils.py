@@ -38,19 +38,28 @@ def save_json(path: str | Path, data: Dict[str, Any]) -> None:
     tmp.replace(p)
 
 
-def configure_logging(log_dir: str | Path = "data/logs", level: str = "DEBUG") -> None:
+def configure_logging(log_dir: str | Path = "data/logs", level: Optional[str] = None) -> None:
     ensure_dirs(log_dir)
     
+    # Load settings to get the logging level if not provided
+    # Load settings to get the logging level if not provided
+    if level is None:
+        settings = load_json(Path(__file__).resolve().parents[1] / "config" / "settings.json")
+        level = settings.get("logging", {}).get("level", "INFO")
+    
+    # Ensure level is a string and uppercase
+    level_str = str(level).upper()
+
     # Configure root logger
     logger = logging.getLogger()
-    logger.setLevel(getattr(logging, level.upper()))
+    logger.setLevel(getattr(logging, level_str))
     
     # Clear existing handlers
     logger.handlers.clear()
     
     # Console handler
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(getattr(logging, level.upper()))
+    console_handler.setLevel(getattr(logging, level_str))
     console_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
@@ -62,13 +71,12 @@ def configure_logging(log_dir: str | Path = "data/logs", level: str = "DEBUG") -
     file_handler = logging.handlers.RotatingFileHandler(
         str(log_file), maxBytes=10*1024*1024, backupCount=7
     )
-    file_handler.setLevel(getattr(logging, level.upper()))
+    file_handler.setLevel(getattr(logging, level_str))
     file_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-
 
 def human_size(num_bytes: int) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:

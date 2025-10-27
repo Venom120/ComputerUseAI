@@ -1,7 +1,7 @@
 {
   "capture": {
     "fps": 3,
-    "quality": 70,
+    "quality": 80,
     "max_storage_mb": 10000,
     "screenshot_format": "webp",
     "max_keep_days": 7,
@@ -40,7 +40,10 @@
     "captures_dir": "data/captures",
     "audio_dir": "data/audio",
     "screens_dir": "data/screens",
-    "encrypt_at_rest": false
+    "encrypt_at_rest": true
+  },
+  "logging": {
+    "level": "INFO"
   },
   "privacy": {
     "exclude_apps": [

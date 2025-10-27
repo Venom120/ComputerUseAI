@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from sqlalchemy import (
+    Boolean,
     JSON,
     Column,
     DateTime,
@@ -23,11 +24,12 @@ class Base(DeclarativeBase):
 class Capture(Base):
     __tablename__ = "captures"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     type: Mapped[str] = mapped_column(String(16))  # screen|audio
     file_path: Mapped[str] = mapped_column(String(512))
     size_bytes: Mapped[int] = mapped_column(Integer)
     metadata_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class Workflow(Base):
@@ -44,10 +46,11 @@ class Workflow(Base):
 class Event(Base):
     __tablename__ = "events"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     event_type: Mapped[str] = mapped_column(String(64))
     application: Mapped[str] = mapped_column(String(256), default="")
     details_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class Execution(Base):

@@ -166,3 +166,45 @@ class WorkflowExecutor:
     def is_running(self) -> bool:
         """Check if a workflow is currently running"""
         return self._running
+
+    def execute_workflow_from_llm(self, workflow_data: Dict[str, Any]):
+        """
+        Receives a workflow dictionary from the LLM, converts it to WorkflowSteps,
+        and executes it.
+        """
+        logger.info("Received workflow from LLM for execution.")
+        if not workflow_data or not workflow_data.get("steps"):
+            logger.warning("LLM workflow data is empty or has no steps. Skipping execution.")
+            return
+
+        # Convert LLM's workflow steps format to WorkflowStep objects
+        steps = []
+        for step_data in workflow_data.get("steps", []):
+            # Assuming LLM provides 'action' and 'target'
+            action_type = step_data.get("action_type", "noop")
+            target = step_data.get("target", "")
+            
+            # LLM might not provide verification, retry_count, timeout directly,
+            # so use defaults or infer if possible.
+            verification = step_data.get("verification", "")
+            retry_count = step_data.get("retry_count", 3)
+            timeout = step_data.get("timeout", 5)
+
+            steps.append(WorkflowStep(
+                action_type=action_type,
+                target=target,
+                verification=verification,
+                retry_count=retry_count,
+                timeout=timeout
+            ))
+        
+        if steps:
+            workflow_id = workflow_data.get("workflow_summary", "LLM Generated Workflow")
+            logger.info(f"Executing LLM generated workflow: {workflow_id} with {len(steps)} steps.")
+            result = self.execute_workflow(workflow_id, steps)
+            if result.success:
+                logger.info(f"LLM workflow '{workflow_id}' completed successfully.")
+            else:
+                logger.error(f"LLM workflow '{workflow_id}' failed: {result.error_message}")
+        else:
+            logger.warning("No executable steps generated from LLM workflow data.")

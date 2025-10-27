@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import cv2
+import numpy as np
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from .speech_to_text import SpeechToText, STTConfig
 from .ocr_engine import OCREngine, OCRConfig
 from .screen_analyzer import ScreenAnalyzer, ScreenAnalyzerConfig
+from datetime import datetime
+
 from ..intelligence.llm_interface import LocalLLM, LLMConfig
-from ..storage.database import initialize_database
+from ..storage.database import initialize_database, Capture, Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +55,8 @@ class ProcessingPipeline(QObject):
             model_path=llm_model_path
         ))
         
-        # TODO: Initialize database connection
-        # db_path = settings.get("storage", {}).get("database_path", "data/app.db")
-        # self.session_factory = initialize_database(db_path)
+        db_path = self.project_root / settings.get("storage", {}).get("database_path", "data/app.db")
+        self.session_factory = initialize_database(db_path)
 
         logger.info("ProcessingPipeline initialized")
 
@@ -68,10 +71,23 @@ class ProcessingPipeline(QObject):
                 transcription = self.stt.transcribe_file(file_path)
                 logger.info(f"Transcription: {transcription['text']}")
                 
-                # TODO: 2. Save transcription to database
-                # session = self.session_factory()
-                # ... save logic ...
-                # session.close()
+                # 2. Save transcription to database
+                session = self.session_factory()
+                try:
+                    new_capture = Capture(
+                        type="audio",
+                        file_path=file_path_str,
+                        size_bytes=file_path.stat().st_size,
+                        metadata_json={"transcription": transcription['text']}
+                    )
+                    session.add(new_capture)
+                    session.commit()
+                    logger.debug(f"Saved transcription for {file_path_str} to DB.")
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Failed to save transcription to DB: {e}")
+                finally:
+                    session.close()
 
                 # 3. Delete file after processing
                 try:
@@ -91,15 +107,44 @@ class ProcessingPipeline(QObject):
         try:
             file_path = Path(file_path_str)
             if file_path.exists():
-                # 1. TODO: Extract frames and run OCR
-                # This is complex. For now, we'll just log it.
-                # In a real implementation, you'd use OpenCV to read the video,
-                # extract keyframes, save them as images, run self.ocr.extract()
-                # on them, and then delete the images.
-                logger.info("TODO: Implement video frame extraction and OCR")
+                # 1. Extract frames and run OCR
+                video_capture = cv2.VideoCapture(file_path_str)
+                frames = []
+                while True:
+                    success, frame = video_capture.read()
+                    if not success:
+                        break
+                    frames.append(frame)
+                video_capture.release()
+
+                if frames:
+                    # For simplicity, process only the first frame for OCR
+                    # In a real scenario, you'd extract keyframes or sample frames
+                    first_frame_rgb = cv2.cvtColor(frames[0], cv2.COLOR_BGR2RGB)
+                    ocr_result = self.ocr.extract(first_frame_rgb)
+                    logger.info(f"OCR result from video frame: {ocr_result}")
+                    
+                    session = self.session_factory()
+                    try:
+                        new_capture = Capture(
+                            type="screen", # Assuming video frames are treated as screens
+                            file_path=file_path_str,
+                            size_bytes=file_path.stat().st_size,
+                            metadata_json={"ocr_text": ocr_result}
+                        )
+                        session.add(new_capture)
+                        session.commit()
+                        logger.debug(f"Saved OCR result for {file_path_str} to DB.")
+                    except Exception as e:
+                        session.rollback()
+                        logger.error(f"Failed to save OCR result to DB: {e}")
+                    finally:
+                        session.close()
+                else:
+                    logger.warning(f"No frames extracted from video: {file_path_str}")
                 
-                # TODO: 2. Run analysis (this is a placeholder)
-                # self.run_analysis()
+                # 2. Run analysis
+                self.run_analysis()
                 
                 # 3. Delete file after processing
                 try:
@@ -120,11 +165,46 @@ class ProcessingPipeline(QObject):
         """
         logger.info("Running periodic analysis...")
         
-        # TODO:
         # 1. Query DB for recent screen_jsons, transcripts, and events
-        # 2. Send to LLM
-        #    workflow = self.llm.analyze_workflow(screens, audio, events)
-        # 3. If repetitive, save workflow to DB and emit signal
-        #    if workflow.get("is_repetitive"):
-        #        self.workflow_detected.emit(workflow)
-        pass
+        # This is a simplified query for demonstration. In a real app, you'd filter by time.
+        session = self.session_factory()
+        try:
+            recent_captures = session.query(Capture).order_by(Capture.timestamp.desc()).limit(10).all()
+            # For now, we'll just log them. In a real scenario, you'd process them.
+            screens = [c.metadata_json for c in recent_captures if c.type == "screen" and c.metadata_json]
+            audio_transcripts = [c.metadata_json["transcription"] for c in recent_captures if c.type == "audio" and c.metadata_json and "transcription" in c.metadata_json]
+            events = [c.metadata_json for c in recent_captures if c.type == "event" and c.metadata_json]
+
+            logger.info(f"Recent screens (OCR): {screens}")
+            logger.info(f"Recent audio transcripts: {audio_transcripts}")
+            logger.info(f"Recent events: {events}")
+
+            # 2. Send to LLM
+            workflow = self.llm.analyze_workflow(screens, audio_transcripts, events)
+            logger.info(f"LLM workflow analysis: {workflow}")
+
+            # 3. If repetitive, save workflow to DB and emit signal
+            if workflow and workflow.get("is_repetitive"):
+                session = self.session_factory()
+                try:
+                    # Assuming 'workflow' dict can be directly stored or has a suitable structure
+                    # You might want to create a more specific Workflow object here
+                    new_workflow = Workflow(
+                        name=workflow.get("workflow_summary", "Unnamed Workflow"),
+                        description=workflow.get("workflow_summary", ""),
+                        pattern_json=workflow, # Store the entire workflow dict
+                        last_used=datetime.utcnow()
+                    )
+                    session.add(new_workflow)
+                    session.commit()
+                    logger.info(f"Repetitive workflow detected and saved to DB: {new_workflow.name}. Emitting signal.")
+                    self.workflow_detected.emit(workflow)
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Failed to save workflow to DB: {e}")
+                finally:
+                    session.close()
+        except Exception as e:
+            logger.error(f"Error during periodic analysis: {e}")
+        finally:
+            session.close()
