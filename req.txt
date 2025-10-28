@@ -87,6 +87,7 @@ python-bidi==0.6.7
 python-xlib==0.33
 python3-xlib==0.15
 pytweening==1.2.0
+pytz==2025.2
 PyYAML==6.0.3
 regex==2025.10.23
 requests==2.32.5
@@ -117,4 +118,3 @@ typer==0.20.0
 typing_extensions==4.15.0
 urllib3==2.5.0
 whispercpp==0.0.17
-pytz==2025.2
