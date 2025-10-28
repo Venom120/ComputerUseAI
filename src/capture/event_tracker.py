@@ -68,6 +68,7 @@ class EventTracker(QObject):
             return ""
 
     def start(self) -> None:
+        logger.debug("EventTracker.start() called.")
         self._running = True
 
         def on_click(x, y, button, pressed):
@@ -81,6 +82,27 @@ class EventTracker(QObject):
                 name = str(key)
             self._log("key_press", {"key": name})
 
+        try:
+            logger.debug("Initializing pynput listeners...")
+            self._mouse_listener = mouse.Listener(on_click=on_click)
+            self._keyboard_listener = keyboard.Listener(on_press=on_press)
+            logger.debug("pynput listeners initialized.")
+
+            logger.debug("Starting mouse listener...")
+            self._mouse_listener.start()
+            logger.debug("Mouse listener started.")
+
+            logger.debug("Starting keyboard listener...")
+            self._keyboard_listener.start()
+            logger.debug("Keyboard listener started.")
+
+            logger.info("Event tracker started successfully") # Changed log message
+        except Exception as e:
+             logger.exception(f"Failed to start pynput listeners: {e}")
+             self._running = False # Ensure running state is correct
+             # Attempt to stop any partially started listeners
+             self.stop()
+
         self._mouse_listener = mouse.Listener(on_click=on_click)
         self._keyboard_listener = keyboard.Listener(on_press=on_press)
         self._mouse_listener.start()
@@ -88,11 +110,24 @@ class EventTracker(QObject):
         logger.info("Event tracker started")
 
     def stop(self) -> None:
+        logger.debug("EventTracker.stop() called.")
         self._running = False
-        for l in (self._mouse_listener, self._keyboard_listener):
+        listeners_to_stop = []
+        if hasattr(self, '_mouse_listener') and self._mouse_listener:
+             listeners_to_stop.append(self._mouse_listener)
+        if hasattr(self, '_keyboard_listener') and self._keyboard_listener:
+             listeners_to_stop.append(self._keyboard_listener)
+
+        for l in listeners_to_stop:
             try:
-                if l:
+                if l and hasattr(l, 'stop') and callable(l.stop): # Check existence and callable
+                    logger.debug(f"Attempting to stop listener: {type(l)}")
                     l.stop()
-            except Exception:
-                pass
-        logger.info("Event tracker stopped")
+                    logger.debug(f"Listener {type(l)} stopped.")
+            except Exception as e:
+                 logger.exception(f"Error stopping listener {type(l)}: {e}")
+
+        # Reset listener attributes after stopping
+        self._mouse_listener = None
+        self._keyboard_listener = None
+        logger.info("Event tracker stop sequence completed.") # Changed log message

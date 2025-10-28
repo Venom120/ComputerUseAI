@@ -86,12 +86,18 @@ def main() -> int:
     tray_icon.show_settings.connect(window.show_settings_tab)
     tray_icon.start_recording.connect(window.start_recording)
     tray_icon.stop_recording.connect(window.stop_recording)
+    
+    # Connect quit signal to the app itself
     tray_icon.quit_app.connect(app.quit)
     
-    # Connect window signals to tray
-    window.start_btn.clicked.connect(lambda: tray_icon.set_recording_state(True))
-    window.stop_btn.clicked.connect(lambda: tray_icon.set_recording_state(False))
-
+    # Ensure window cleanup happens before app quits
+    def on_app_quit():
+        """Ensure cleanup logic in MainWindow.closeEvent is called before exit."""
+        logger.info("Application aboutToQuit signal received. Closing main window...")
+        window.close()  # This will trigger MainWindow.closeEvent
+    
+    app.aboutToQuit.connect(on_app_quit)
+    
     # Connect main window events back to the tray to sync state
     window.recording_started.connect(lambda: tray_icon.set_recording_state(True))
     window.recording_stopped.connect(lambda: tray_icon.set_recording_state(False))
@@ -138,4 +144,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

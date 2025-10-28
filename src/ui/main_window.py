@@ -1,11 +1,11 @@
-from __future__ import annotations
+# src/ui/main_window.py (Updated)
 
 import time
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QMetaObject
 from PyQt6.QtWidgets import (
     QWidget,
     QMainWindow,
@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QSlider,
 )
+from PyQt6.QtGui import QCloseEvent
 
 from ..utils import human_size, load_json, save_json
 from ..storage.database import initialize_database
@@ -53,13 +54,17 @@ class RecordingTimerThread(QThread):
             elapsed = time.time() - self._start_time
             # Format as MM:SS
             elapsed_str = time.strftime("%M:%S", time.gmtime(elapsed))
-            self.status_updated.emit(f"Recording... ({elapsed_str})")
-            time.sleep(1)
-    
+            status_text = f"Recording... ({elapsed_str})"
+            # logger.debug(f"TimerThread emitting: {status_text}") # Keep commented unless debugging signals
+            self.status_updated.emit(status_text)
+            self.msleep(1000) # Sleep for 1000 milliseconds (1 second)
+        logger.info("RecordingTimerThread run loop finished.")
+
     def stop(self):
+        logger.debug("RecordingTimerThread stop called.")
         self.running = False
 
-
+# Add QObject as the first base class if inheriting multiple
 class MainWindow(QMainWindow):
     recording_started = pyqtSignal()
     recording_stopped = pyqtSignal()
@@ -68,30 +73,41 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: Dict[str, Any], project_root: Path):
         super().__init__()
         self.settings = settings
-        self.project_root = project_root  # Store the root path
+        self.project_root = project_root
         self.workflow_executor = WorkflowExecutor()
         
         self.timer_thread = RecordingTimerThread()
         self.timer_thread.status_updated.connect(self.update_status)
-        
+
+        # Initialize pipeline and its thread at startup
+        self.processing_pipeline: Optional[ProcessingPipeline] = None
+        self.processing_thread: Optional[QThread] = None
+        try:
+            self.processing_pipeline = ProcessingPipeline(self.settings, self.project_root)
+            self.processing_thread = QThread()
+            self.processing_pipeline.moveToThread(self.processing_thread)
+            self.processing_thread.start()
+            logger.info("Processing pipeline thread started at launch. Models are loading.")
+        except Exception as e:
+            logger.exception(f"Failed to initialize ProcessingPipeline at startup: {e}")
+            QMessageBox.critical(self, "Fatal Error", f"Failed to load AI models: {e}\nApplication may not function correctly.")
+
         # Placeholders for capture objects and threads
         self.screen_capture: Optional[ScreenCapture] = None
         self.audio_capture: Optional[AudioCapture] = None
         self.event_tracker: Optional[EventTracker] = None
-        self.processing_pipeline: Optional[ProcessingPipeline] = None
-        
+
         self.screen_thread: Optional[QThread] = None
         self.audio_thread: Optional[QThread] = None
         self.event_thread: Optional[QThread] = None
-        self.processing_thread: Optional[QThread] = None
-        
+
         self.setWindowTitle("ComputerUseAI")
         self.setMinimumSize(1000, 700)
-        
+
         # Initialize database
-        db_path = Path("data/app.db")
+        db_path = project_root / settings.get("storage", {}).get("database_path", "data/app.db")
         self.session_factory = initialize_database(db_path)
-        
+
         self._init_ui()
         self._load_workflows()
 
@@ -103,12 +119,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._timeline_tab(), "Timeline")
         self.tabs.addTab(self._automation_tab(), "Automation")
         self.tabs.addTab(self._settings_tab(), "Settings")
-
-        self.setCentralWidget(self.tabs) # Use self.tabs
+        self.setCentralWidget(self.tabs)
 
     def show_settings_tab(self):
-        """Finds and switches to the Settings tab, then shows the window."""
-        # Find the settings tab by name to be safer than a fixed index
         settings_index = -1
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i).lower() == "settings":
@@ -378,21 +391,17 @@ class MainWindow(QMainWindow):
             )
             
             event_config = EventTrackerConfig(
-                log_path=Path("data/logs/events.jsonl") # Log events to a file
+                log_path=self.project_root / "data/logs/events.jsonl"
             )
-            
-           # 3. Create Capture Objects
-            screens_dir = stor_settings.get("screens_dir", "data/screens")
-            audio_dir = stor_settings.get("audio_dir", "data/audio")
+
+            screens_dir = self.project_root / stor_settings.get("screens_dir", "data/screens")
+            audio_dir = self.project_root / stor_settings.get("audio_dir", "data/audio")
 
             self.screen_capture = ScreenCapture(screens_dir, screen_config)
             self.audio_capture = AudioCapture(audio_dir, audio_config)
             self.event_tracker = EventTracker(event_config)
-            
-            # 4. CREATE PROCESSING PIPELINE
-            self.processing_pipeline = ProcessingPipeline(self.settings, self.project_root)
 
-            # 5. Create and start threads
+            # Create and start threads
             self.screen_thread = QThread()
             self.screen_capture.moveToThread(self.screen_thread)
             self.screen_thread.started.connect(self.screen_capture.start)
@@ -410,84 +419,124 @@ class MainWindow(QMainWindow):
             self.event_thread.started.connect(self.event_tracker.start)
             self.event_thread.start()
             logger.info("Event tracker thread started.")
-            
-            self.processing_thread = QThread()
-            self.processing_pipeline.moveToThread(self.processing_thread)
-            self.processing_thread.started.connect(self.processing_pipeline.start)
-            self.processing_thread.start()
-            logger.info("Processing pipeline thread started.")
 
-            # 6. CONNECT SIGNALS TO SLOTS
+            # Connect signals
+            if not self.processing_pipeline:
+                 logger.error("Processing pipeline is not initialized. Cannot connect signals.")
+                 raise Exception("Processing pipeline was not initialized correctly.")
             self.audio_capture.audio_file_ready.connect(self.processing_pipeline.process_audio)
             self.screen_capture.video_file_ready.connect(self.processing_pipeline.process_video)
-            # self.processing_pipeline.workflow_detected.connect(self.on_workflow_detected)
 
-            # 7. Start UI timer and update UI
-            self.timer_thread.start()
+            # Start the pipeline's internal timer
+            QMetaObject.invokeMethod(self.processing_pipeline, "start", Qt.ConnectionType.QueuedConnection)
+            logger.info("Signaled processing pipeline to start its analysis timer.")
+
+            # Update UI and start UI timer LAST
             self.start_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
             self.recording_started.emit()
-            
+
+            if not self.timer_thread.isRunning():
+                 self.timer_thread.start()
+
         except Exception as e:
             logger.exception("Failed to start recording: %s", e)
             QMessageBox.critical(self, "Error", f"Failed to start recording: {e}")
-            # Rollback UI
-            self.stop_recording() # Call stop to clean up any partial starts
+            self.stop_recording()
 
     def stop_recording(self):
+        logger.info("Stop recording requested.")
         # Stop UI timer first
-        self.timer_thread.stop()
-        
-        # Stop backend threads
+        if self.timer_thread.isRunning():
+            logger.debug("Stopping RecordingTimerThread...")
+            self.timer_thread.stop()
+            if not self.timer_thread.wait(1000): # --- MODIFIED: Added check ---
+                 logger.warning("RecordingTimerThread did not finish in time.")
+            else:
+                 logger.debug("RecordingTimerThread finished.")
+        else:
+            logger.debug("RecordingTimerThread was not running.")
+
+
+        # Stop backend capture threads
         try:
+            # --- Screen Capture ---
             if self.screen_capture:
+                logger.debug("Calling ScreenCapture.stop()...")
                 self.screen_capture.stop()
             if self.screen_thread:
+                logger.debug("Quitting screen_thread...")
                 self.screen_thread.quit()
-                self.screen_thread.wait(1000) # Wait 1s
-                logger.info("Screen capture thread stopped.")
-                
+                logger.debug("Waiting for screen_thread...")
+                if not self.screen_thread.wait(2000): # Increased wait time slightly
+                     logger.warning("Screen capture thread did not finish in time.")
+                else:
+                     logger.info("Screen capture thread stopped.")
+                self.screen_thread = None
+            else:
+                logger.debug("screen_thread not found.")
+
+            # --- Audio Capture ---
             if self.audio_capture:
+                logger.debug("Calling AudioCapture.stop()...")
                 self.audio_capture.stop()
             if self.audio_thread:
+                logger.debug("Quitting audio_thread...")
                 self.audio_thread.quit()
-                self.audio_thread.wait(1000) # Wait 1s
-                logger.info("Audio capture thread stopped.")
-                
-            if self.event_tracker:
-                self.event_tracker.stop()
-            if self.event_thread:
-                self.event_thread.quit()
-                self.event_thread.wait(1000) # Wait 1s
-                logger.info("Event tracker thread stopped.")
-        except Exception as e:
-            logger.error("Error stopping threads: %s", e)
-        finally:
-            if self.processing_pipeline:
-                self.processing_pipeline.stop()
-            if self.processing_thread:
-                self.processing_thread.quit()
-                self.processing_thread.wait(1000)
-                logger.info("Processing pipeline thread stopped.")
+                logger.debug("Waiting for audio_thread...")
+                if not self.audio_thread.wait(2000): # Increased wait time slightly
+                    logger.warning("Audio capture thread did not finish in time.")
+                else:
+                    logger.info("Audio capture thread stopped.")
+                self.audio_thread = None
+            else:
+                 logger.debug("audio_thread not found.")
 
-            # Reset objects
+
+            # --- Event Tracker ---
+            if self.event_tracker:
+                logger.debug("Calling EventTracker.stop()...")
+                self.event_tracker.stop() # This stops the pynput listeners
+            if self.event_thread:
+                logger.debug("Quitting event_thread...")
+                self.event_thread.quit() # Signals the QThread event loop to exit
+                logger.debug("Waiting for event_thread...")
+                if not self.event_thread.wait(2000): # Increased wait time slightly
+                     logger.warning("Event tracker thread did not finish in time.")
+                else:
+                     logger.info("Event tracker thread stopped.")
+                self.event_thread = None
+            else:
+                 logger.debug("event_thread not found.")
+
+        except Exception as e:
+            logger.exception("Error stopping capture threads: %s", e) # --- MODIFIED: Use exception logging ---
+        finally:
+            # Stop the pipeline's internal timer
+            if self.processing_pipeline:
+                logger.debug("Signaling processing pipeline timer to stop...")
+                QMetaObject.invokeMethod(self.processing_pipeline, "stop", Qt.ConnectionType.QueuedConnection)
+                logger.info("Signaled processing pipeline to stop its analysis timer.")
+            else:
+                 logger.warning("Processing pipeline not found during stop.")
+
+
+            # Reset capture objects
+            logger.debug("Resetting capture object references.")
             self.screen_capture = None
             self.audio_capture = None
             self.event_tracker = None
-            if self.processing_pipeline:
-                self.processing_pipeline.stop()
-            if self.processing_thread:
-                self.processing_thread.quit()
-                self.processing_thread.wait(1000)
-                logger.info("Processing pipeline thread stopped.")
 
             # Update UI
+            logger.debug("Updating UI state for stop.")
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
             self.update_status("Stopped recording")
             self.recording_stopped.emit()
+            logger.info("Stop recording sequence finished.")
 
     def update_status(self, status: str):
+        logger.debug(f"MainWindow update_status slot received: {status}")
         self.status_label.setText(f"Status: {status}")
         if "Recording" in status:
             self.status_label.setStyleSheet("font-weight: bold; color: red;")
@@ -495,25 +544,22 @@ class MainWindow(QMainWindow):
             self.status_label.setStyleSheet("font-weight: bold; color: green;")
 
     def update_stats(self):
-        # Calculate storage usage
         try:
             total_size = 0
-            for path in Path("data").rglob("*"):
+            data_path = self.project_root / "data"
+            for path in data_path.rglob("*"):
                 if path.is_file():
                     total_size += path.stat().st_size
             self.storage_label.setText(f"Storage usage: {human_size(total_size)}")
         except Exception as e:
             logger.warning("Could not calculate storage size: %s", e)
             self.storage_label.setText("Storage usage: Unknown")
-        
-        # Update workflow count
+
         workflow_count = self.workflow_list.count()
         self.workflows_label.setText(f"Learned workflows: {workflow_count}")
 
     def _load_workflows(self):
-        # Load workflows from database or files
-        # This is a placeholder implementation
-        pass
+        pass # Placeholder
 
     def create_workflow(self):
         QMessageBox.information(self, "Create Workflow", "Workflow creation dialog would open here")
@@ -526,7 +572,7 @@ class MainWindow(QMainWindow):
     def delete_workflow(self):
         current_item = self.workflow_list.currentItem()
         if current_item:
-            reply = QMessageBox.question(self, "Delete Workflow", 
+            reply = QMessageBox.question(self, "Delete Workflow",
                                       f"Delete workflow: {current_item.text()}?",
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
@@ -562,11 +608,34 @@ class MainWindow(QMainWindow):
             
             excluded_text = self.exclude_apps_text.toPlainText()
             self.settings["privacy"]["exclude_apps"] = [app.strip() for app in excluded_text.split("\n") if app.strip()]
-            
-            # Save to file
-            config_path = Path("config/settings.json")
+            config_path = self.project_root / "config/settings.json"
             save_json(config_path, self.settings)
             QMessageBox.information(self, "Settings", f"Settings saved to {config_path.resolve()}")
         except Exception as e:
-            logger.exception("Failed to save settings: %s", e)
+            logger.exception(f"Failed to save settings: {e}")
             QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")
+
+    def closeEvent(self, a0: Optional[QCloseEvent]):
+        """Handle window close event for graceful thread shutdown."""
+        logger.info("Main window close event triggered. Cleaning up threads...")
+        if self.stop_btn.isEnabled():
+            QMetaObject.invokeMethod(self, "stop_recording", Qt.ConnectionType.QueuedConnection)
+            QThread.msleep(100) # Give stop_recording a moment to process
+
+        if self.processing_pipeline:
+            QMetaObject.invokeMethod(self.processing_pipeline, "stop", Qt.ConnectionType.QueuedConnection)
+        if self.processing_thread:
+            self.processing_thread.quit()
+            if not self.processing_thread.wait(2000):
+                 logger.warning("Processing thread did not shut down gracefully.")
+            else:
+                logger.info("Processing pipeline thread shut down.")
+
+        if self.timer_thread.isRunning():
+            self.timer_thread.stop()
+            if not self.timer_thread.wait(1000):
+                logger.warning("Recording timer thread did not shut down gracefully.")
+            else:
+                logger.info("Recording timer thread shut down.")
+
+        logger.info("Cleanup complete. Allowing window to close.")
