@@ -408,10 +408,12 @@ class MainWindow(QMainWindow):
             self.event_thread = QThread()
             self.event_tracker.moveToThread(self.event_thread)
             self.event_thread.started.connect(self.event_tracker.start)
+            self.event_thread.start()
             logger.info("Event tracker thread started.")
             
             self.processing_thread = QThread()
             self.processing_pipeline.moveToThread(self.processing_thread)
+            self.processing_thread.started.connect(self.processing_pipeline.start)
             self.processing_thread.start()
             logger.info("Processing pipeline thread started.")
 
@@ -461,15 +463,23 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error("Error stopping threads: %s", e)
         finally:
+            if self.processing_pipeline:
+                self.processing_pipeline.stop()
+            if self.processing_thread:
+                self.processing_thread.quit()
+                self.processing_thread.wait(1000)
+                logger.info("Processing pipeline thread stopped.")
+
             # Reset objects
             self.screen_capture = None
             self.audio_capture = None
             self.event_tracker = None
-            self.screen_thread = None
-            self.audio_thread = None
-            self.event_thread = None
-            self.processing_pipeline = None
-            self.processing_thread = None
+            if self.processing_pipeline:
+                self.processing_pipeline.stop()
+            if self.processing_thread:
+                self.processing_thread.quit()
+                self.processing_thread.wait(1000)
+                logger.info("Processing pipeline thread stopped.")
 
             # Update UI
             self.start_btn.setEnabled(True)

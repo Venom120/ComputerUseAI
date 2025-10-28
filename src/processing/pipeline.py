@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QTimer
 
 from .speech_to_text import SpeechToText, STTConfig
 from .ocr_engine import OCREngine, OCRConfig
@@ -58,7 +58,22 @@ class ProcessingPipeline(QObject):
         db_path = self.project_root / settings.get("storage", {}).get("database_path", "data/app.db")
         self.session_factory = initialize_database(db_path)
 
+        # Initialize a timer for periodic analysis
+        self.analysis_timer = QTimer(self)
+        self.analysis_timer.timeout.connect(self.run_analysis)
+        
         logger.info("ProcessingPipeline initialized")
+
+    def start(self):
+        """Starts the periodic analysis timer."""
+        analysis_interval_ms = self.settings.get("processing", {}).get("analysis_interval_sec", 60) * 1000
+        self.analysis_timer.start(analysis_interval_ms)
+        logger.info(f"ProcessingPipeline started with analysis interval: {analysis_interval_ms / 1000} seconds")
+
+    def stop(self):
+        """Stops the periodic analysis timer."""
+        self.analysis_timer.stop()
+        logger.info("ProcessingPipeline stopped")
 
     @pyqtSlot(str)
     def process_audio(self, file_path_str: str):
