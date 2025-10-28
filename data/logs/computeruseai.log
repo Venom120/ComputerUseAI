@@ -1,0 +1,48 @@
+2025-10-28 16:55:50,521 - __main__ - INFO - ComputerUseAI application starting...
+2025-10-28 16:55:52,609 - src.processing.speech_to_text - INFO - Initialized faster-whisper with model: base
+2025-10-28 16:55:53,561 - src.intelligence.llm_interface - INFO - LLM loaded successfully: phi-3-mini-4k-instruct-q4.gguf
+2025-10-28 16:55:53,569 - src.processing.pipeline - INFO - ProcessingPipeline initialized
+2025-10-28 16:55:53,569 - src.ui.main_window - INFO - Processing pipeline thread started at launch. Models are loading.
+2025-10-28 16:55:53,620 - src.ui.main_window - INFO - No saved workflows found.
+2025-10-28 16:55:53,620 - src.ui.main_window - INFO - Loaded 0 workflows into UI list.
+2025-10-28 16:55:53,622 - src.ui.tray_icon - INFO - Showing system tray icon.
+2025-10-28 16:55:53,666 - src.storage.cleanup - INFO - Marked 0 old records as deleted in DB.
+2025-10-28 16:55:53,667 - __main__ - INFO - Cleaned up 0 old files/records.
+2025-10-28 16:55:53,668 - src.storage.cleanup - INFO - Current storage (0 bytes) is within limit (10485760000 bytes). No size cleanup needed.
+2025-10-28 16:55:53,669 - __main__ - INFO - Cleaned up 0 files/records due to size limit.
+2025-10-28 16:55:53,671 - src.storage.cleanup - INFO - Hard deleted 0 records and their files older than 30 days.
+2025-10-28 16:55:53,671 - __main__ - INFO - Hard deleted 0 records and files past retention period.
+2025-10-28 16:56:11,578 - src.ui.main_window - INFO - Start recording requested.
+2025-10-28 16:56:11,578 - src.ui.main_window - INFO - Starting screen capture thread...
+2025-10-28 16:56:11,578 - src.ui.main_window - INFO - Starting audio capture thread...
+2025-10-28 16:56:11,579 - src.ui.main_window - INFO - Starting event tracker thread...
+2025-10-28 16:56:11,579 - src.ui.main_window - INFO - Connected capture signals to processing pipeline.
+2025-10-28 16:56:11,580 - src.processing.pipeline - INFO - ProcessingPipeline started analysis timer with interval: 60.0 seconds
+2025-10-28 16:56:11,585 - src.ui.main_window - INFO - Signaled processing pipeline to start its analysis timer.
+2025-10-28 16:56:11,586 - src.capture.event_tracker - INFO - Event tracker started successfully
+2025-10-28 16:56:11,586 - src.processing.pipeline - INFO - Running periodic analysis...
+2025-10-28 16:56:11,586 - src.ui.main_window - INFO - Starting UI timer thread...
+2025-10-28 16:56:11,587 - src.capture.event_tracker - INFO - Event tracker started
+2025-10-28 16:56:11,610 - src.processing.pipeline - INFO - No recent screen, audio, or event data found for analysis.
+2025-10-28 16:56:11,630 - src.capture.screen_capture - INFO - Screen capture started at 3 FPS
+2025-10-28 16:56:11,675 - src.capture.audio_capture - INFO - Audio stream started @ 16000 Hz
+2025-10-28 16:56:17,151 - src.ui.main_window - INFO - No saved workflows found.
+2025-10-28 16:56:17,151 - src.ui.main_window - INFO - Loaded 0 workflows into UI list.
+2025-10-28 16:56:18,042 - src.ui.main_window - INFO - Timeline refreshed with 0 items.
+2025-10-28 16:56:21,975 - src.ui.main_window - INFO - Stop recording requested.
+2025-10-28 16:56:22,610 - src.ui.main_window - INFO - RecordingTimerThread run loop finished.
+2025-10-28 16:56:22,611 - src.capture.event_tracker - INFO - Event tracker stop sequence completed.
+2025-10-28 16:56:22,619 - src.capture.audio_capture - INFO - Audio stream stopped in finally block.
+2025-10-28 16:56:22,619 - src.capture.audio_capture - INFO - Audio capture loop finished.
+2025-10-28 16:56:22,636 - src.capture.screen_capture - INFO - Screen capture stopped
+2025-10-28 16:56:22,638 - src.ui.main_window - INFO - Screen capture thread stopped.
+2025-10-28 16:56:22,638 - src.ui.main_window - INFO - Audio capture thread stopped.
+2025-10-28 16:56:22,638 - src.ui.main_window - INFO - Event capture thread stopped.
+2025-10-28 16:56:22,638 - src.ui.main_window - INFO - Signaled processing pipeline to stop its analysis timer.
+2025-10-28 16:56:22,638 - src.processing.pipeline - INFO - ProcessingPipeline stopped analysis timer.
+2025-10-28 16:56:22,639 - src.ui.main_window - INFO - Stop recording sequence finished. Final status: Stopped recording
+2025-10-28 16:56:24,320 - src.ui.main_window - INFO - Attempting to open data directory: file:///mnt/62C667B5C667885D/ComputerUseAI/data
+2025-10-28 16:56:36,203 - src.ui.main_window - INFO - No saved workflows found.
+2025-10-28 16:56:36,203 - src.ui.main_window - INFO - Loaded 0 workflows into UI list.
+2025-10-28 16:56:37,162 - src.ui.main_window - INFO - Timeline refreshed with 0 items.
+2025-10-28 16:56:38,650 - src.ui.main_window - INFO - Timeline refreshed with 0 items.

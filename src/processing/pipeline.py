@@ -6,16 +6,17 @@ import logging
 from pathlib import Path
 import cv2, pytz
 import numpy as np
+from datetime import datetime, timedelta # Added timedelta
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QTimer
 
 from .speech_to_text import SpeechToText, STTConfig
 from .ocr_engine import OCREngine, OCRConfig
 from .screen_analyzer import ScreenAnalyzer, ScreenAnalyzerConfig
-from datetime import datetime
+
 
 from ..intelligence.llm_interface import LocalLLM, LLMConfig
-from ..storage.database import initialize_database, Capture, Workflow
+from ..storage.database import initialize_database, Capture, Workflow, Event # Added Event
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class ProcessingPipeline(QObject):
         # Correctly read the STT model *name* (e.g., "base") from settings.
         stt_model_name = settings.get("stt", {}).get("model", "base")
         self.stt = SpeechToText(STTConfig(
-            model_path=Path(stt_model_name)
+            model_path=Path(stt_model_name) # Pass the name directly
         ))
 
         self.ocr = OCREngine(OCRConfig(
@@ -57,38 +58,39 @@ class ProcessingPipeline(QObject):
             model_path=llm_model_path
         ))
 
-        db_path = self.project_root / settings.get("storage", {}).get("database_path", "data/app.db")
+        db_path_str = settings.get("storage", {}).get("database_path", "data/app.db")
+        db_path = self.project_root / db_path_str
         self.session_factory = initialize_database(db_path)
 
         # Initialize a timer for periodic analysis
         self.analysis_timer = QTimer(self)
         self.analysis_timer.timeout.connect(self.run_analysis)
+        self.analysis_interval_sec = settings.get("processing", {}).get("analysis_interval_sec", 60) # Store interval
 
         logger.info("ProcessingPipeline initialized")
 
-    # --- NEW ---
     @pyqtSlot()
-    # --- END NEW ---
     def start(self):
         """Starts the periodic analysis timer."""
         # Check if timer is already active to prevent multiple starts
         if self.analysis_timer.isActive():
             logger.warning("Analysis timer is already active. Ignoring start request.")
             return
-            
-        analysis_interval_ms = self.settings.get("processing", {}).get("analysis_interval_sec", 60) * 1000
+
+        analysis_interval_ms = self.analysis_interval_sec * 1000
         self.analysis_timer.start(analysis_interval_ms)
         logger.info(f"ProcessingPipeline started analysis timer with interval: {analysis_interval_ms / 1000} seconds")
+        # Run analysis immediately on start as well
+        self.run_analysis()
 
-    # --- NEW ---
+
     @pyqtSlot()
-    # --- END NEW ---
     def stop(self):
         """Stops the periodic analysis timer."""
         if not self.analysis_timer.isActive():
             logger.warning("Analysis timer is not active. Ignoring stop request.")
             return
-            
+
         self.analysis_timer.stop()
         logger.info("ProcessingPipeline stopped analysis timer.")
 
@@ -107,7 +109,11 @@ class ProcessingPipeline(QObject):
                 # 2. Save transcription to database
                 session = self.session_factory()
                 try:
+                    # --- ADDED: Extract timestamp from filename ---
+                    timestamp_from_name = self._extract_timestamp_from_filename(file_path.name)
+
                     new_capture = Capture(
+                        timestamp=timestamp_from_name, # Use extracted timestamp
                         type="audio",
                         file_path=file_path_str,
                         size_bytes=file_path.stat().st_size,
@@ -141,12 +147,19 @@ class ProcessingPipeline(QObject):
             file_path = Path(file_path_str)
             if file_path.exists():
                 logger.info(f"Processing video: {file_path.name}")
-                # 1. Extract frames and run OCR (Simplified: First frame only)
+                # 1. Extract frames and run OCR (Simplified: First frame only for now)
+                # TODO: Enhance this to extract multiple keyframes and process them.
                 try:
                     video_capture = cv2.VideoCapture(file_path_str)
                     if not video_capture.isOpened():
                          logger.error(f"Could not open video file: {file_path_str}")
-                         return # Exit early if video can't be opened
+                         # --- ADDED: Attempt to delete corrupt file ---
+                         try:
+                             file_path.unlink()
+                             logger.warning(f"Deleted potentially corrupt video file: {file_path.name}")
+                         except Exception as del_e:
+                             logger.warning(f"Failed to delete video file {file_path.name} after open error: {del_e}")
+                         return # Exit early
 
                     success, frame = video_capture.read()
                     video_capture.release() # Release immediately after getting the frame
@@ -160,9 +173,13 @@ class ProcessingPipeline(QObject):
                         # Save OCR result to database
                         session = self.session_factory()
                         try:
+                            # --- ADDED: Extract timestamp from filename ---
+                            timestamp_from_name = self._extract_timestamp_from_filename(file_path.name)
+
                             # Store only the extracted text items for brevity
                             ocr_items_metadata = {"items": ocr_result.get("items", [])}
                             new_capture = Capture(
+                                timestamp=timestamp_from_name, # Use extracted timestamp
                                 type="screen", # Treat video frame analysis as screen capture
                                 file_path=file_path_str, # Link DB record to original video file name
                                 size_bytes=file_path.stat().st_size,
@@ -178,7 +195,7 @@ class ProcessingPipeline(QObject):
                             session.close()
                     else:
                         logger.warning(f"Failed to extract first frame from video: {file_path.name}")
-                        
+
                 except Exception as cv_e:
                      logger.exception(f"Error during video frame extraction/OCR for {file_path.name}: {cv_e}")
 
@@ -193,8 +210,28 @@ class ProcessingPipeline(QObject):
         except Exception as e:
             logger.exception(f"Failed to process video file {file_path_str}: {e}")
 
-    # Note: run_analysis is called by the QTimer, not directly invoked,
-    # so it doesn't strictly need @pyqtSlot, but adding it doesn't hurt.
+    def _extract_timestamp_from_filename(self, filename: str) -> datetime:
+        """Helper to extract timestamp from 'prefix_YYYYMMDD_HHMMSS...' format."""
+        # Expecting format like audio_YYYYMMDD_HHMMSS.wav or video_YYYYMMDD_HHMMSS.mp4
+        parts = filename.split('_')
+        if len(parts) >= 3:
+            try:
+                # Combine date and time parts
+                timestamp_str = f"{parts[1]}{parts[2].split('.')[0]}" # Remove extension if present
+                dt_obj = datetime.strptime(timestamp_str, "%Y%m%d%H%M%S")
+                # Assume local timezone initially and convert to UTC
+                local_tz = datetime.now(pytz.UTC).astimezone().tzinfo
+                dt_local = dt_obj.replace(tzinfo=local_tz)
+                dt_utc = dt_local.astimezone(pytz.utc)
+                logger.debug(f"Extracted timestamp {dt_utc} from filename {filename}")
+                return dt_utc
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Could not parse timestamp from filename '{filename}': {e}. Using current UTC time.")
+        else:
+            logger.warning(f"Filename '{filename}' doesn't match expected format for timestamp extraction. Using current UTC time.")
+        return datetime.now(pytz.UTC)
+
+
     @pyqtSlot()
     def run_analysis(self):
         """
@@ -205,56 +242,88 @@ class ProcessingPipeline(QObject):
 
         session = self.session_factory()
         try:
-            # --- Simplified Query Example ---
-            # Query the last 10 capture records regardless of type for analysis context
-            # A more robust implementation would filter by timestamp (e.g., last 60 seconds)
-            # and potentially fetch related events based on timestamps.
+            # --- MODIFIED Query: Fetch data within the analysis interval ---
+            now_utc = datetime.now(pytz.UTC)
+            start_time_utc = now_utc - timedelta(seconds=self.analysis_interval_sec * 1.1) # Add a small buffer
+
+            logger.debug(f"Analysis query time range: {start_time_utc} to {now_utc}")
+
             recent_captures = session.query(Capture)\
-                                     .filter(Capture.deleted == False)\
-                                     .order_by(Capture.timestamp.desc())\
-                                     .limit(10)\
+                                     .filter(Capture.timestamp >= start_time_utc,
+                                             Capture.deleted == False)\
+                                     .order_by(Capture.timestamp.asc())\
                                      .all()
+
+            # --- ADDED: Query recent events ---
+            recent_events = session.query(Event)\
+                                   .filter(Event.timestamp >= start_time_utc,
+                                           Event.deleted == False)\
+                                   .order_by(Event.timestamp.asc())\
+                                   .all()
 
             screens = [c.metadata_json.get("ocr_data", {}) for c in recent_captures if c.type == "screen" and c.metadata_json]
             audio_transcripts = [c.metadata_json.get("transcription", "") for c in recent_captures if c.type == "audio" and c.metadata_json]
-            # Fetch events separately if needed, or assume they are logged elsewhere for now
-            events = [] # Placeholder - event data isn't currently stored via this pipeline
+
+            # --- ADDED: Format events for LLM ---
+            # Extract key info from events to keep the prompt concise
+            events_for_llm = [
+                {
+                    "ts": event.timestamp.isoformat(),
+                    "type": event.event_type,
+                    "app": event.application,
+                    "details": event.details_json
+                }
+                for event in recent_events
+            ]
+
 
             # Basic logging of collected data for debugging
-            logger.debug(f"Analysis using {len(screens)} recent screens and {len(audio_transcripts)} audio transcripts.")
+            logger.debug(f"Analysis using {len(screens)} recent screens, {len(audio_transcripts)} audio transcripts, and {len(events_for_llm)} events.")
             # logger.debug(f"Screens sample: {screens[:1]}") # Log first screen's data
             # logger.debug(f"Transcripts sample: {audio_transcripts[:2]}") # Log first few transcripts
+            # logger.debug(f"Events sample: {events_for_llm[:5]}") # Log first few events
 
             # 2. Send to LLM if data is available
-            if screens or audio_transcripts:
-                workflow = self.llm.analyze_workflow(screens, audio_transcripts, events)
+            if screens or audio_transcripts or events_for_llm:
+                # --- MODIFIED: Pass events_for_llm ---
+                workflow = self.llm.analyze_workflow(screens, audio_transcripts, events_for_llm)
                 logger.info(f"LLM workflow analysis result: Summary='{workflow.get('workflow_summary')}', Repetitive={workflow.get('is_repetitive')}")
 
                 # 3. If repetitive, save workflow to DB and emit signal
                 # Check for a meaningful summary and repetitive flag
-                if workflow and workflow.get("is_repetitive") and workflow.get("workflow_summary") not in ["", "LLM response was not valid JSON."]:
+                if workflow and workflow.get("is_repetitive") and workflow.get("workflow_summary") not in ["", "LLM response was not valid JSON.", "LLM returned no content."]:
                     # Ensure session is still active
                     if not session.is_active:
                          session = self.session_factory() # Get a new session if needed
 
                     try:
                         workflow_name = workflow.get("workflow_summary", "Unnamed Workflow")
-                        new_workflow = Workflow(
-                            name=workflow_name,
-                            description=workflow.get("workflow_summary", ""),
-                            pattern_json=workflow, # Store the entire LLM response dict
-                            last_used=datetime.now(pytz.UTC)
-                        )
-                        session.add(new_workflow)
+                        # --- Check if workflow with the same name exists ---
+                        existing_workflow = session.query(Workflow).filter_by(name=workflow_name).first()
+                        if existing_workflow:
+                             logger.info(f"Workflow '{workflow_name}' already exists. Updating last_used timestamp.")
+                             existing_workflow.last_used = datetime.now(pytz.UTC)
+                             existing_workflow.pattern_json = workflow # Update with latest pattern
+                             # Potentially update success rate or other metrics here later
+                        else:
+                             logger.info(f"Saving new repetitive workflow to DB: '{workflow_name}'.")
+                             new_workflow = Workflow(
+                                 name=workflow_name,
+                                 description=workflow.get("workflow_summary", ""),
+                                 pattern_json=workflow, # Store the entire LLM response dict
+                                 last_used=datetime.now(pytz.UTC)
+                             )
+                             session.add(new_workflow)
+
                         session.commit()
-                        logger.info(f"Repetitive workflow detected and saved to DB: '{new_workflow.name}'. Emitting signal.")
+                        logger.info(f"Workflow '{workflow_name}' processed. Emitting signal.")
                         # Emit the *original* workflow dictionary received from LLM
                         self.workflow_detected.emit(workflow)
                     except Exception as db_e:
                         session.rollback()
-                        logger.error(f"Failed to save workflow to DB: {db_e}")
+                        logger.error(f"Failed to save or update workflow in DB: {db_e}")
             else:
-                logger.info("No recent screen or audio data found for analysis.")
+                logger.info("No recent screen, audio, or event data found for analysis.")
 
         except Exception as e:
             logger.exception(f"Error during periodic analysis: {e}")
