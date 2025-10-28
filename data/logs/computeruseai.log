@@ -46,3 +46,48 @@
 2025-10-28 16:56:36,203 - src.ui.main_window - INFO - Loaded 0 workflows into UI list.
 2025-10-28 16:56:37,162 - src.ui.main_window - INFO - Timeline refreshed with 0 items.
 2025-10-28 16:56:38,650 - src.ui.main_window - INFO - Timeline refreshed with 0 items.
+2025-10-28 16:59:39,418 - __main__ - INFO - ComputerUseAI application starting...
+2025-10-28 16:59:41,657 - src.processing.speech_to_text - INFO - Initialized faster-whisper with model: base
+2025-10-28 16:59:42,661 - src.intelligence.llm_interface - INFO - LLM loaded successfully: phi-3-mini-4k-instruct-q4.gguf
+2025-10-28 16:59:42,677 - src.processing.pipeline - INFO - ProcessingPipeline initialized
+2025-10-28 16:59:42,678 - src.ui.main_window - INFO - Processing pipeline thread started at launch. Models are loading.
+2025-10-28 16:59:42,737 - src.ui.main_window - INFO - No saved workflows found.
+2025-10-28 16:59:42,737 - src.ui.main_window - INFO - Loaded 0 workflows into UI list.
+2025-10-28 16:59:42,739 - src.ui.tray_icon - INFO - Showing system tray icon.
+2025-10-28 16:59:42,792 - src.storage.cleanup - INFO - Marked 0 old records as deleted in DB.
+2025-10-28 16:59:42,793 - __main__ - INFO - Cleaned up 0 old files/records.
+2025-10-28 16:59:42,795 - src.storage.cleanup - INFO - Current storage (0 bytes) is within limit (10485760000 bytes). No size cleanup needed.
+2025-10-28 16:59:42,796 - __main__ - INFO - Cleaned up 0 files/records due to size limit.
+2025-10-28 16:59:42,798 - src.storage.cleanup - INFO - Hard deleted 0 records and their files older than 30 days.
+2025-10-28 16:59:42,798 - __main__ - INFO - Hard deleted 0 records and files past retention period.
+2025-10-28 16:59:45,407 - src.ui.main_window - INFO - Attempting to open data directory: file:///mnt/62C667B5C667885D/ComputerUseAI/data
+2025-10-28 16:59:48,927 - src.ui.main_window - INFO - Start recording requested.
+2025-10-28 16:59:48,928 - src.ui.main_window - INFO - Starting screen capture thread...
+2025-10-28 16:59:48,928 - src.ui.main_window - INFO - Starting audio capture thread...
+2025-10-28 16:59:48,928 - src.ui.main_window - INFO - Starting event tracker thread...
+2025-10-28 16:59:48,933 - src.capture.event_tracker - INFO - Event tracker started successfully
+2025-10-28 16:59:48,934 - src.ui.main_window - INFO - Connected capture signals to processing pipeline.
+2025-10-28 16:59:48,937 - src.processing.pipeline - INFO - ProcessingPipeline started analysis timer with interval: 60.0 seconds
+2025-10-28 16:59:48,939 - src.ui.main_window - INFO - Signaled processing pipeline to start its analysis timer.
+2025-10-28 16:59:48,939 - src.processing.pipeline - INFO - Running periodic analysis...
+2025-10-28 16:59:48,942 - src.ui.main_window - INFO - Starting UI timer thread...
+2025-10-28 16:59:48,952 - src.processing.pipeline - INFO - No recent screen, audio, or event data found for analysis.
+2025-10-28 16:59:48,970 - src.capture.screen_capture - INFO - Screen capture started at 3 FPS
+2025-10-28 16:59:49,024 - src.capture.audio_capture - INFO - Audio stream started @ 16000 Hz
+2025-10-28 16:59:58,489 - src.ui.main_window - INFO - Stop recording requested.
+2025-10-28 16:59:58,947 - src.ui.main_window - INFO - RecordingTimerThread run loop finished.
+2025-10-28 16:59:58,947 - src.capture.event_tracker - INFO - Event tracker stop sequence completed.
+2025-10-28 16:59:58,955 - src.capture.audio_capture - INFO - Audio stream stopped in finally block.
+2025-10-28 16:59:58,955 - src.capture.audio_capture - INFO - Audio capture loop finished.
+2025-10-28 16:59:58,974 - src.capture.screen_capture - INFO - Screen capture stopped
+2025-10-28 16:59:58,976 - src.ui.main_window - INFO - Screen capture thread stopped.
+2025-10-28 16:59:58,976 - src.ui.main_window - INFO - Audio capture thread stopped.
+2025-10-28 16:59:58,976 - src.ui.main_window - INFO - Event capture thread stopped.
+2025-10-28 16:59:58,976 - src.ui.main_window - INFO - Signaled processing pipeline to stop its analysis timer.
+2025-10-28 16:59:58,976 - src.processing.pipeline - INFO - ProcessingPipeline stopped analysis timer.
+2025-10-28 16:59:58,976 - src.ui.main_window - INFO - Stop recording sequence finished. Final status: Stopped recording
+2025-10-28 17:00:05,105 - src.ui.main_window - INFO - Main window close event triggered by user (X button). Hiding window.
+2025-10-28 17:00:18,279 - src.ui.main_window - INFO - No saved workflows found.
+2025-10-28 17:00:18,279 - src.ui.main_window - INFO - Loaded 0 workflows into UI list.
+2025-10-28 17:00:18,640 - src.ui.main_window - INFO - Timeline refreshed with 0 items.
+2025-10-28 17:00:20,165 - src.ui.main_window - INFO - Main window close event triggered by user (X button). Hiding window.

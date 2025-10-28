@@ -38,6 +38,10 @@ class EventTracker(QObject):
         self._running = False
 
     def _log(self, event_type: str, details: Dict[str, Any]) -> None:
+        # Check if running before logging to prevent logs after stop request
+        if not self._running:
+            logger.debug(f"Event logging skipped as tracker is stopped (Event: {event_type})")
+            return
         entry = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "event_type": event_type,
@@ -45,8 +49,12 @@ class EventTracker(QObject):
             "app": self._active_process_name(),
             "details": details,
         }
-        with self.config.log_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
+        try:
+            with self.config.log_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to write event log entry: {e}")
+
 
     def _active_window_title(self) -> str:
         if not win32gui:
@@ -69,21 +77,32 @@ class EventTracker(QObject):
 
     def start(self) -> None:
         logger.debug("EventTracker.start() called.")
+        if self._running:
+            logger.warning("Event tracker is already running.")
+            return
         self._running = True
 
         def on_click(x, y, button, pressed):
-            if pressed:
+            # Only log if tracker is still running
+            if self._running and pressed:
                 self._log("mouse_click", {"x": x, "y": y, "button": str(button)})
 
         def on_press(key):
-            try:
-                name = key.char if hasattr(key, "char") and key.char else str(key)
-            except Exception:
-                name = str(key)
-            self._log("key_press", {"key": name})
+            # Only log if tracker is still running
+            if self._running:
+                try:
+                    name = key.char if hasattr(key, "char") and key.char else str(key)
+                except Exception:
+                    name = str(key)
+                self._log("key_press", {"key": name})
 
         try:
             logger.debug("Initializing pynput listeners...")
+            # Ensure listeners are None before creating new ones
+            if self._mouse_listener or self._keyboard_listener:
+                 logger.warning("Listeners already exist before start. Attempting to clean up.")
+                 self.stop() # Try to stop existing ones first
+
             self._mouse_listener = mouse.Listener(on_click=on_click)
             self._keyboard_listener = keyboard.Listener(on_press=on_press)
             logger.debug("pynput listeners initialized.")
@@ -103,15 +122,11 @@ class EventTracker(QObject):
              # Attempt to stop any partially started listeners
              self.stop()
 
-        self._mouse_listener = mouse.Listener(on_click=on_click)
-        self._keyboard_listener = keyboard.Listener(on_press=on_press)
-        self._mouse_listener.start()
-        self._keyboard_listener.start()
-        logger.info("Event tracker started")
-
     def stop(self) -> None:
         logger.debug("EventTracker.stop() called.")
+        # Set running flag to False FIRST to prevent further logging from callbacks
         self._running = False
+
         listeners_to_stop = []
         if hasattr(self, '_mouse_listener') and self._mouse_listener:
              listeners_to_stop.append(self._mouse_listener)
@@ -120,14 +135,18 @@ class EventTracker(QObject):
 
         for l in listeners_to_stop:
             try:
-                if l and hasattr(l, 'stop') and callable(l.stop): # Check existence and callable
+                # Check listener existence and that it has a callable stop method
+                if l and hasattr(l, 'stop') and callable(l.stop):
                     logger.debug(f"Attempting to stop listener: {type(l)}")
                     l.stop()
-                    logger.debug(f"Listener {type(l)} stopped.")
+                    # Optionally wait for listener thread join if pynput supports it reliably
+                    # if hasattr(l, 'join') and callable(l.join):
+                    #     l.join(timeout=0.5) # Add a small timeout
+                    logger.debug(f"Listener {type(l)} stop method called.")
             except Exception as e:
-                 logger.exception(f"Error stopping listener {type(l)}: {e}")
+                 logger.exception(f"Error calling stop on listener {type(l)}: {e}")
 
-        # Reset listener attributes after stopping
+        # Reset listener attributes after attempting to stop
         self._mouse_listener = None
         self._keyboard_listener = None
         logger.info("Event tracker stop sequence completed.") # Changed log message
